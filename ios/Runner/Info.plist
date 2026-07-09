@@ -35,6 +35,12 @@
 	<string>Sip needs local network access to discover and reach SIP services on your network.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>For VOIP Calls</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app requires camera access to support features like scanning configuration QR codes or video calling.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app requires access to the photo library to select and upload client certificates or configuration files.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app requires location access to optimize call routing and verify network connectivity.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
