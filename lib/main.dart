@@ -31,7 +31,7 @@ void main() async {
             final bloc = SipBloc();
             if (savedConfig != null) {
               final config = SipConfig.fromMap(savedConfig);
-              bloc.add(InitializeAndLoginSip(config.copyWith(logLevel: SdkLogLevel.verbose)));
+              bloc.add(InitializeAndLoginSip(config));
             }
             return bloc;
           },
