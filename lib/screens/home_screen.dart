@@ -436,7 +436,7 @@ class _RegStatusBar extends StatelessWidget {
   }
 }
 
-class _DialInput extends StatelessWidget {
+class _DialInput extends StatefulWidget {
   final String dialInput;
   final ValueChanged<String> onChanged;
   final VoidCallback onBackspace;
@@ -446,6 +446,40 @@ class _DialInput extends StatelessWidget {
     required this.onChanged,
     required this.onBackspace,
   });
+
+  @override
+  State<_DialInput> createState() => _DialInputState();
+}
+
+class _DialInputState extends State<_DialInput> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.dialInput);
+  }
+
+  @override
+  void didUpdateWidget(covariant _DialInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.dialInput != widget.dialInput &&
+        _controller.text != widget.dialInput) {
+      _controller.value = TextEditingValue(
+        text: widget.dialInput,
+        selection: TextSelection.collapsed(
+          offset: widget.dialInput.length,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -463,17 +497,20 @@ class _DialInput extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
-              controller: TextEditingController(text: dialInput)
-                ..selection = TextSelection.collapsed(offset: dialInput.length),
-              readOnly: true,
+              controller: _controller,
+              keyboardType: TextInputType.text,
+              textCapitalization: TextCapitalization.none,
+              autocorrect: false,
+              enableSuggestions: false,
+              readOnly: false,
               showCursor: true,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: colorScheme.onSurface,
                 fontSize: 22,
                 fontWeight: FontWeight.w500,
                 letterSpacing: 1.5,
               ),
-              textAlign: TextAlign.center,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: 'Enter number or SIP URI',
@@ -481,19 +518,18 @@ class _DialInput extends StatelessWidget {
                   color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                   fontSize: 14,
                   letterSpacing: 0,
-                  fontWeight: FontWeight.normal,
                 ),
               ),
-              onChanged: onChanged,
+              onChanged: widget.onChanged,
             ),
           ),
-          if (dialInput.isNotEmpty)
+          if (widget.dialInput.isNotEmpty)
             IconButton(
               icon: Icon(
                 Icons.backspace_outlined,
                 color: colorScheme.onSurfaceVariant,
               ),
-              onPressed: onBackspace,
+              onPressed: widget.onBackspace,
             ),
         ],
       ),
