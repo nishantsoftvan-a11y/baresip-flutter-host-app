@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:sipsdk_flutter/sipsdk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../bloc/sip_bloc.dart';
+import '../utils/call_log_service.dart';
+import 'call_stats_widget.dart';
 
 class CallScreen extends StatelessWidget {
   const CallScreen({super.key});
@@ -98,12 +102,119 @@ class _IncomingCallView extends StatelessWidget {
 
 // ── Active / outgoing call ────────────────────────────────────────────────────
 
-class _ActiveCallView extends StatelessWidget {
+class _ActiveCallView extends StatefulWidget {
   final SipState state;
   const _ActiveCallView({required this.state});
 
   @override
+  State<_ActiveCallView> createState() => _ActiveCallViewState();
+}
+
+class _ActiveCallViewState extends State<_ActiveCallView> {
+  bool _showStats = false;
+  bool _isSharing = false;
+  String? _prevPeerUri;
+  CallState? _prevCallState;
+
+  // Background logger — polls every second regardless of the stats UI toggle.
+  Timer? _logTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    final s = widget.state;
+    // If we're already in an established/held call when the widget mounts
+    if (s.callPeerUri.isNotEmpty) {
+      CallLogService.instance.startSession(
+        peerUri: s.callPeerUri,
+        direction: s.callState == CallState.incoming ? 'incoming' : 'outgoing',
+      );
+      _prevPeerUri = s.callPeerUri;
+      _prevCallState = s.callState;
+    }
+    if (s.callState == CallState.established || s.callState == CallState.held) {
+      _startLogPolling();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_ActiveCallView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final s = widget.state;
+    final prev = oldWidget.state;
+
+    // Start a new session when a call begins (peer URI becomes non-empty)
+    if (s.callPeerUri.isNotEmpty && _prevPeerUri != s.callPeerUri) {
+      final direction = s.callState == CallState.incoming
+          ? 'incoming'
+          : 'outgoing';
+      CallLogService.instance.startSession(
+        peerUri: s.callPeerUri,
+        direction: direction,
+      );
+    }
+
+    // Log every state transition
+    if (s.callState != _prevCallState && s.callState != null) {
+      CallLogService.instance.logState(s.callState!.name);
+    }
+    if (s.callState == null && _prevCallState != null) {
+      CallLogService.instance.logState('closed');
+    }
+
+    // Start/stop the background log poller when call state changes
+    final nowActive =
+        s.callState == CallState.established || s.callState == CallState.held;
+    final wasActive =
+        prev.callState == CallState.established ||
+        prev.callState == CallState.held;
+    if (nowActive && !wasActive) _startLogPolling();
+    if (!nowActive && wasActive) _stopLogPolling();
+
+    _prevPeerUri = s.callPeerUri;
+    _prevCallState = s.callState;
+  }
+
+  @override
+  void dispose() {
+    _stopLogPolling();
+    super.dispose();
+  }
+
+  void _startLogPolling() {
+    _logTimer?.cancel();
+    _logTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      try {
+        final stats = await SipClient.instance.getCallStats();
+        if (stats != null) CallLogService.instance.logStats(stats);
+      } catch (_) {}
+    });
+  }
+
+  void _stopLogPolling() {
+    _logTimer?.cancel();
+    _logTimer = null;
+  }
+
+  Future<void> _shareLog() async {
+    setState(() => _isSharing = true);
+    try {
+      CallLogService.instance.endSession();
+      await CallLogService.instance.shareLog();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not share log: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final state = widget.state;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final bloc = context.read<SipBloc>();
@@ -118,7 +229,9 @@ class _ActiveCallView extends StatelessWidget {
         Text(
           state.callLabel,
           style: theme.textTheme.titleMedium?.copyWith(
-            color: isEstablished ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            color: isEstablished
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
             fontWeight: isEstablished ? FontWeight.bold : FontWeight.normal,
             letterSpacing: 1.5,
             fontFeatures: isEstablished
@@ -127,11 +240,11 @@ class _ActiveCallView extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
 
         // Avatar
-        _Avatar(uri: state.callPeerUri, size: 100),
-        const SizedBox(height: 20),
+        _Avatar(uri: state.callPeerUri, size: 80),
+        const SizedBox(height: 16),
 
         // Peer URI
         Text(
@@ -154,6 +267,11 @@ class _ActiveCallView extends StatelessWidget {
               ),
             ),
           ),
+
+        const SizedBox(height: 12),
+
+        // ── Stats toggle & panel ─────────────────────────────────────────
+        if (isEstablished || isHeld) ..._buildStatsSection(colorScheme),
 
         const Spacer(),
 
@@ -193,7 +311,30 @@ class _ActiveCallView extends StatelessWidget {
                 ],
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
+
+              // Share log button (visible only when established or held)
+              if (isEstablished || isHeld)
+                TextButton.icon(
+                  onPressed: _isSharing ? null : _shareLog,
+                  icon: _isSharing
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.share, size: 18),
+                  label: Text(_isSharing ? 'Sharing…' : 'Share Call Log'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: colorScheme.primary,
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+
+              const SizedBox(height: 16),
 
               // Hang up
               GestureDetector(
@@ -220,12 +361,76 @@ class _ActiveCallView extends StatelessWidget {
                 ),
               ),
 
-              const SizedBox(height: 48),
+              const SizedBox(height: 32),
             ],
           ),
         ),
       ],
     );
+  }
+
+  List<Widget> _buildStatsSection(ColorScheme colorScheme) {
+    return [
+      // Toggle chip
+      GestureDetector(
+        onTap: () => setState(() => _showStats = !_showStats),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: _showStats
+                ? colorScheme.primaryContainer
+                : colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _showStats
+                  ? colorScheme.primary.withValues(alpha: 0.5)
+                  : colorScheme.outlineVariant,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.analytics_outlined,
+                size: 15,
+                color: _showStats
+                    ? colorScheme.onPrimaryContainer
+                    : colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _showStats ? 'Hide Stats' : 'Show Stats',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: _showStats
+                      ? colorScheme.onPrimaryContainer
+                      : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+
+      // Collapsible stats widget
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        transitionBuilder: (child, anim) =>
+            SizeTransition(sizeFactor: anim, child: child),
+        child: _showStats
+            ? Padding(
+                key: const ValueKey('stats'),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: CallStatsWidget(visible: true, refreshIntervalMs: 1000),
+              )
+            : const SizedBox.shrink(key: ValueKey('no_stats')),
+      ),
+    ];
   }
 
   IconData _getRouteIcon(AudioRoute route) {
@@ -494,12 +699,16 @@ class _ToggleButton extends StatelessWidget {
                     : colorScheme.surfaceContainerHigh,
                 shape: BoxShape.circle,
                 border: active
-                    ? Border.all(color: colorScheme.primary.withValues(alpha: 0.5))
+                    ? Border.all(
+                        color: colorScheme.primary.withValues(alpha: 0.5),
+                      )
                     : null,
               ),
               child: Icon(
                 icon,
-                color: active ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
+                color: active
+                    ? colorScheme.onPrimaryContainer
+                    : colorScheme.onSurfaceVariant,
                 size: 26,
               ),
             ),
