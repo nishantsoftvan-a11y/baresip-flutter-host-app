@@ -305,14 +305,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     on<ClearErrorSip>(_onClearError);
 
     // Internal updates
-    on<_OnRegistrationStateChanged>(
-      (event, emit) => emit(
-        state.copyWith(
-          regState: event.event.state,
-          regReason: event.event.reason,
-        ),
-      ),
-    );
+    on<_OnRegistrationStateChanged>(_onRegistrationStateChanged);
 
     on<_OnCallStateChanged>(_onCallStateUpdated);
     on<_OnAudioRouteChanged>(
@@ -687,7 +680,40 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     emit(state.copyWith(lastError: () => null));
   }
 
-  // ── Stream callback event helpers ──────────────────────────────────────────
+  // ── Registration state handler ─────────────────────────────────────────────
+
+  /// Returns true if [reason] indicates iOS killed the TCP socket (errno 32 EPIPE).
+  bool _isBrokenPipeReason(String reason) =>
+      reason.contains('Broken pipe') || reason.contains('[32]');
+
+  Future<void> _onRegistrationStateChanged(
+    _OnRegistrationStateChanged event,
+    Emitter<SipState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        regState: event.event.state,
+        regReason: event.event.reason,
+      ),
+    );
+
+    // iOS silently kills TCP sockets when backgrounded / screen-locked.
+    // Baresip only detects the dead socket when the 60-second re-register
+    // timer fires, producing errno 32 (EPIPE / "Broken pipe").
+    //
+    // WHY login() and NOT goOffline()+goOnline():
+    //   goOffline = unregister, goOnline = register — both reuse the SAME
+    //   dead baresip TCP transport and fail again with Broken pipe.
+    //   login() calls start() which first calls stop() (tears down the
+    //   broken transport entirely), then creates a fresh TCP connection
+    //   and re-registers.
+    if (event.event.state == RegistrationState.failed &&
+        _isBrokenPipeReason(event.event.reason)) {
+      // Brief delay so in-flight REGISTER_FAIL events finish processing.
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+      if (!isClosed) add(const LoginSip());
+    }
+  }
 
   void _onCallStateUpdated(_OnCallStateChanged event, Emitter<SipState> emit) {
     final e = event.event;
