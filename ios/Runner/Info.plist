@@ -24,6 +24,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -31,24 +33,16 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>This app requires camera access to support features like scanning configuration QR codes or video calling.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Sip needs local network access to discover and reach SIP services on your network.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app requires location access to optimize call routing and verify network connectivity.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>For VOIP Calls</string>
-    <key>NSCameraUsageDescription</key>
-    <string>This app requires camera access to support features like scanning configuration QR codes or video calling.</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>This app requires access to the photo library to select and upload client certificates or configuration files.</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>This app requires location access to optimize call routing and verify network connectivity.</string>
-    <key>ITSAppUsesNonExemptEncryption</key>
-    <false/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>voip</string>
-		<string>audio</string>
-	</array>
-
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app requires access to the photo library to select and upload client certificates or configuration files.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -70,10 +64,13 @@
 			</array>
 		</dict>
 	</dict>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>voip</string>
+		<string>audio</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
