@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sipsdk_flutter/sipsdk_flutter.dart';
@@ -177,7 +178,15 @@ class CallLogService {
   ///
   /// The file name follows the pattern:
   /// `HHmmss-call-<peer>-<direction>-logs.txt`
-  Future<void> shareLog() async {
+  Future<void> shareLog([BuildContext? context]) async {
+    Rect? sharePositionOrigin;
+    if (context != null) {
+      final box = context.findRenderObject() as RenderBox?;
+      if (box != null) {
+        sharePositionOrigin = box.localToGlobal(Offset.zero) & box.size;
+      }
+    }
+
     final start = _sessionStart ?? DateTime.now();
     final peer = _cleanPeer(_peerUri).replaceAll(RegExp(r'[^\w\-]'), '_');
     final timeStr =
@@ -194,6 +203,7 @@ class CallLogService {
       [XFile(file.path, mimeType: 'text/plain')],
       subject: 'Call Log – $peer',
       text: 'Call log for $_direction call with $peer on ${_fmtDate(start)}.',
+      sharePositionOrigin: sharePositionOrigin,
     );
   }
 

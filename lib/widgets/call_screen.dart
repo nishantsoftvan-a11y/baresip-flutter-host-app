@@ -200,7 +200,7 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
     setState(() => _isSharing = true);
     try {
       CallLogService.instance.endSession();
-      await CallLogService.instance.shareLog();
+      await CallLogService.instance.shareLog(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
