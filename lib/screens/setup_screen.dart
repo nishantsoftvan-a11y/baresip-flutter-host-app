@@ -115,7 +115,11 @@ class _SetupFormState extends State<_SetupForm> {
   }
 
   Future<void> _requestPermissions() async {
-    await [Permission.microphone, Permission.phone].request();
+    await [
+      Permission.microphone,
+      Permission.phone,
+      Permission.notification,
+    ].request();
   }
 
   // ── File Picker for PEM files ───────────────────────────────────────────────

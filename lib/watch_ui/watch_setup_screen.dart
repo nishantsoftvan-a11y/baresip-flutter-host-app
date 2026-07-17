@@ -66,7 +66,11 @@ class _WatchSetupFormState extends State<_WatchSetupForm> {
   }
 
   Future<void> _requestPermissions() async {
-    await [Permission.microphone, Permission.phone].request();
+    await [
+      Permission.microphone,
+      Permission.phone,
+      Permission.notification,
+    ].request();
   }
 
   void _submit(BuildContext context) async {

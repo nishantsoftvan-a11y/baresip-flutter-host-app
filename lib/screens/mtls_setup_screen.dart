@@ -77,7 +77,11 @@ class _MtlsSetupFormState extends State<_MtlsSetupForm> {
   }
 
   Future<void> _requestPermissions() async {
-    await [Permission.microphone, Permission.phone].request();
+    await [
+      Permission.microphone,
+      Permission.phone,
+      Permission.notification,
+    ].request();
   }
 
   // ── File Picker ─────────────────────────────────────────────────────────────
