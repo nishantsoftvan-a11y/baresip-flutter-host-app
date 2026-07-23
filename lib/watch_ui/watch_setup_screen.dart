@@ -37,7 +37,7 @@ class _WatchSetupFormState extends State<_WatchSetupForm> {
   final _hostCtrl = TextEditingController();
 
   // Hidden controllers for mTLS
-  final _portCtrl = TextEditingController(text: '5060');
+  final _portCtrl = TextEditingController(text: '5061');
   final _stunCtrl = TextEditingController();
   final _authUsernameCtrl = TextEditingController();
   final _mtlsAliasCtrl = TextEditingController();

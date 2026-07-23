@@ -104,7 +104,7 @@ class AppConstants {
   static const String defaultPassword = '';
   static const String defaultDisplayName = '';
   static const String defaultHost = '';
-  static const String defaultPort = '5060';
+  static const String defaultPort = '5061';
   static const String defaultAuthUsername = '';
   static const String defaultMtlsAlias = '';
   static const String defaultEnrollmentUrl = '';

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:sipsdk_flutter/sipsdk_flutter.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../features/user_profiles/domain/models/user_profile.dart';
+
 // ── SetupPendingAction ────────────────────────────────────────────────────────
 
 enum SetupPendingAction { none, plainLogin, mtlsPem, csrEnroll }
@@ -16,6 +18,12 @@ abstract class SetupEvent {
 class SetupLoadFromConfig extends SetupEvent {
   final SipConfig config;
   const SetupLoadFromConfig(this.config);
+}
+
+/// Load all fields from a previously saved [UserProfile] into the form.
+class SetupLoadFromProfile extends SetupEvent {
+  final UserProfile profile;
+  const SetupLoadFromProfile(this.profile);
 }
 
 class SetupToggleMtls extends SetupEvent {
@@ -216,6 +224,12 @@ class SetupState {
   final String? syncTurnUsername;
   final String? syncTurnPassword;
   final String? syncIceKeepAliveInterval;
+  // PEM fields — only set when loading from a profile
+  final String? syncClientCertPem;
+  final String? syncPrivateKeyPem;
+  final String? syncCaCertPem;
+  final String? syncEnrollmentUrl;
+  final String? syncAuthToken;
 
   final SetupPendingAction pendingAction;
   final SipConfig? pendingConfig;
@@ -223,10 +237,10 @@ class SetupState {
   final MtlsConfig? pendingMtlsConfig;
 
   const SetupState({
-    this.transport = SipTransport.tcp,
+    this.transport = SipTransport.tls,
     this.mediaNat = MediaNat.none,
-    this.mediaEncryption = MediaEncryption.none,
-    this.useMtls = false,
+    this.mediaEncryption = MediaEncryption.srtp,
+    this.useMtls = true,
     this.useCsr = false,
     this.obscurePassword = true,
     this.showAdvanced = false,
@@ -242,6 +256,7 @@ class SetupState {
       AudioCodec.g722,
       AudioCodec.pcmu,
       AudioCodec.pcma,
+      AudioCodec.g729,
     },
     this.stunPort = 3478,
     this.stunRefreshPeriod = 30,
@@ -269,6 +284,11 @@ class SetupState {
     this.syncTurnUsername,
     this.syncTurnPassword,
     this.syncIceKeepAliveInterval,
+    this.syncClientCertPem,
+    this.syncPrivateKeyPem,
+    this.syncCaCertPem,
+    this.syncEnrollmentUrl,
+    this.syncAuthToken,
     this.pendingAction = SetupPendingAction.none,
     this.pendingConfig,
     this.pendingCsrConfig,
@@ -317,6 +337,11 @@ class SetupState {
     String? Function()? syncTurnUsername,
     String? Function()? syncTurnPassword,
     String? Function()? syncIceKeepAliveInterval,
+    String? Function()? syncClientCertPem,
+    String? Function()? syncPrivateKeyPem,
+    String? Function()? syncCaCertPem,
+    String? Function()? syncEnrollmentUrl,
+    String? Function()? syncAuthToken,
     SetupPendingAction? pendingAction,
     SipConfig? Function()? pendingConfig,
     CsrConfig? Function()? pendingCsrConfig,
@@ -381,6 +406,21 @@ class SetupState {
       syncIceKeepAliveInterval: syncIceKeepAliveInterval != null
           ? syncIceKeepAliveInterval()
           : this.syncIceKeepAliveInterval,
+      syncClientCertPem: syncClientCertPem != null
+          ? syncClientCertPem()
+          : this.syncClientCertPem,
+      syncPrivateKeyPem: syncPrivateKeyPem != null
+          ? syncPrivateKeyPem()
+          : this.syncPrivateKeyPem,
+      syncCaCertPem: syncCaCertPem != null
+          ? syncCaCertPem()
+          : this.syncCaCertPem,
+      syncEnrollmentUrl: syncEnrollmentUrl != null
+          ? syncEnrollmentUrl()
+          : this.syncEnrollmentUrl,
+      syncAuthToken: syncAuthToken != null
+          ? syncAuthToken()
+          : this.syncAuthToken,
       pendingAction: pendingAction ?? this.pendingAction,
       pendingConfig: pendingConfig != null
           ? pendingConfig()
@@ -478,6 +518,81 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
       );
     });
 
+    on<SetupLoadFromProfile>((event, emit) {
+      final p = event.profile;
+
+      // Parse transport enum
+      final transport = SipTransport.fromString(p.transport);
+
+      // Parse media nat
+      final mediaNat = MediaNat.values.firstWhere(
+        (e) => e.name.toLowerCase() == p.mediaNat.toLowerCase(),
+        orElse: () => MediaNat.none,
+      );
+
+      // Parse media enc
+      final mediaEnc = MediaEncryption.values.firstWhere(
+        (e) => e.name.toLowerCase() == p.mediaEncryption.toLowerCase(),
+        orElse: () => MediaEncryption.none,
+      );
+
+      // Codecs mapping
+      final loadedCodecs = p.audioCodecs
+          .map((c) => AudioCodec.fromString(c))
+          .whereType<AudioCodec>()
+          .toList();
+      final fullList = [
+        ...loadedCodecs,
+        ...AudioCodec.defaultCodecs.where((c) => !loadedCodecs.contains(c)),
+      ];
+      final enabledSet = Set<AudioCodec>.from(loadedCodecs.isEmpty ? AudioCodec.defaultCodecs : loadedCodecs);
+
+      emit(
+        state.copyWith(
+          transport: transport,
+          mediaNat: mediaNat,
+          mediaEncryption: mediaEnc,
+          useMtls: p.useMtls,
+          useCsr: p.useCsr,
+          useAuthUsername: p.authUsername.isNotEmpty,
+          audioCodecs: fullList,
+          enabledCodecs: enabledSet,
+          stunPort: p.stunPort,
+          stunRefreshPeriod: p.stunRefreshPeriod,
+          stunAllowPrivateAddress: p.stunAllowPrivateAddress,
+          stunAllowPrivateServer: p.stunAllowPrivateServer,
+          stunDnsSrv: p.stunDnsSrv,
+          useRportSignalling: p.useRportSignalling,
+          useRportMedia: p.useRportMedia,
+          turnPort: p.turnPort,
+          iceEnabled: p.iceEnabled,
+          iceAggressiveNomination: p.iceAggressiveNomination,
+          iceKeepAliveInterval: p.iceKeepAliveInterval,
+          syncToken: state.syncToken + 1,
+          syncUsername: () => p.username,
+          syncPassword: () => p.password,
+          syncDisplayName: () => p.displayName,
+          syncHost: () => p.host,
+          syncPort: () => p.port.toString(),
+          syncAuthUsername: () => p.authUsername,
+          syncMtlsAlias: () => p.mtlsAlias,
+          syncStun: () => p.stunServer,
+          syncStunPort: () => p.stunPort.toString(),
+          syncStunRefreshPeriod: () => p.stunRefreshPeriod.toString(),
+          syncTurn: () => p.turnServer,
+          syncTurnPort: () => p.turnPort.toString(),
+          syncTurnUsername: () => p.turnUsername,
+          syncTurnPassword: () => p.turnPassword,
+          syncIceKeepAliveInterval: () => p.iceKeepAliveInterval.toString(),
+          syncClientCertPem: () => p.clientCertPem,
+          syncPrivateKeyPem: () => p.privateKeyPem,
+          syncCaCertPem: () => p.caCertPem,
+          syncEnrollmentUrl: () => p.enrollmentUrl,
+          syncAuthToken: () => p.authToken,
+        ),
+      );
+    });
+
     on<SetupToggleMtls>((event, emit) {
       if (event.value) {
         emit(
@@ -561,7 +676,7 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
           state.copyWith(
             transport: event.transport,
             syncToken: state.syncToken + 1,
-            syncPort: () => '5060',
+            syncPort: () => '5061',
           ),
         );
       }
@@ -651,9 +766,7 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
                 : event.username.trim())
           : event.displayName.trim(),
       host: event.host.trim(),
-      port:
-          int.tryParse(event.port.trim()) ??
-          (state.transport == SipTransport.tls ? 5061 : 5060),
+      port: int.tryParse(event.port.trim()) ?? 5061,
       transport: state.transport,
       useRportSignalling: event.useRportSignalling,
       useRportMedia: event.useRportMedia,

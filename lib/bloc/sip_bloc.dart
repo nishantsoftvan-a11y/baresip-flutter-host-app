@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:sipsdk_flutter/sipsdk_flutter.dart';
 
 // ── SipState ─────────────────────────────────────────────────────────────────
@@ -235,6 +236,10 @@ class ClearErrorSip extends SipEvent {
   const ClearErrorSip();
 }
 
+class RequestPermissionsSip extends SipEvent {
+  const RequestPermissionsSip();
+}
+
 // Stream updates
 class _OnRegistrationStateChanged extends SipEvent {
   final RegistrationStateEvent event;
@@ -303,6 +308,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     on<RemoveMtlsCredentialsSip>(_onRemoveMtlsCredentials);
     on<LoadMtlsCertInfoSip>(_onLoadMtlsCertInfo);
     on<ClearErrorSip>(_onClearError);
+    on<RequestPermissionsSip>(_onRequestPermissions);
 
     // Internal updates
     on<_OnRegistrationStateChanged>(_onRegistrationStateChanged);
@@ -350,6 +356,18 @@ class SipBloc extends Bloc<SipEvent, SipState> {
       _client.mtlsErrorStream.listen((e) => add(_OnMtlsErrorOccurred(e))),
       _client.mtlsCertExpiringStream.listen((e) => add(_OnMtlsCertExpiring(e))),
     ]);
+  }
+
+  Future<void> _onRequestPermissions(
+    RequestPermissionsSip event,
+    Emitter<SipState> emit,
+  ) async {
+    try {
+      // Request runtime permissions safely after UI frame has rendered
+      await [Permission.microphone, Permission.notification].request();
+    } catch (e) {
+      // Non-fatal permission request error
+    }
   }
 
   Future<void> _onInitialize(

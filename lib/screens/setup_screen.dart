@@ -12,6 +12,7 @@ import '../widgets/custom_button.dart';
 import '../widgets/segment_control.dart';
 import '../widgets/text_label_field.dart';
 import '../utils/file_picker_helper.dart';
+import '../features/user_profiles/widgets/user_profiles_panel.dart';
 
 // ── SetupScreen entry ─────────────────────────────────────────────────────────
 
@@ -377,6 +378,21 @@ class _SetupFormState extends State<_SetupForm> {
       if (state.syncIceKeepAliveInterval != null) {
         _iceKeepAliveIntervalCtrl.text = state.syncIceKeepAliveInterval!;
       }
+      if (state.syncClientCertPem != null) {
+        _clientCertCtrl.text = state.syncClientCertPem!;
+      }
+      if (state.syncPrivateKeyPem != null) {
+        _privateKeyCtrl.text = state.syncPrivateKeyPem!;
+      }
+      if (state.syncCaCertPem != null) {
+        _caCertCtrl.text = state.syncCaCertPem!;
+      }
+      if (state.syncEnrollmentUrl != null) {
+        _enrollmentUrlCtrl.text = state.syncEnrollmentUrl!;
+      }
+      if (state.syncAuthToken != null) {
+        _authTokenCtrl.text = state.syncAuthToken!;
+      }
     }
 
     // ── Handle pending SIP action ────────────────────────────────────────────
@@ -419,6 +435,59 @@ class _SetupFormState extends State<_SetupForm> {
     final setupState = setupBloc.state;
     await _requestPermissions();
     if (!mounted) return;
+
+    final username = _usernameCtrl.text.trim();
+    final mtlsAlias = _mtlsAliasCtrl.text.trim();
+    final host = _hostCtrl.text.trim();
+    final port = int.tryParse(_portCtrl.text.trim()) ?? 5061;
+
+    final profile = UserProfile(
+      id: UserProfile.buildId(
+        username: username,
+        mtlsAlias: mtlsAlias,
+        host: host,
+        port: port,
+      ),
+      displayName: _displayNameCtrl.text.trim(),
+      username: username,
+      password: _passwordCtrl.text,
+      host: host,
+      port: port,
+      transport: setupState.transport.wireName,
+      authUsername: _authUsernameCtrl.text.trim(),
+      useMtls: setupState.useMtls,
+      useCsr: setupState.useCsr,
+      mtlsAlias: mtlsAlias,
+      caCertPem: _caCertCtrl.text.trim(),
+      clientCertPem: _clientCertCtrl.text.trim(),
+      privateKeyPem: _privateKeyCtrl.text.trim(),
+      enrollmentUrl: _enrollmentUrlCtrl.text.trim(),
+      authToken: _authTokenCtrl.text.trim(),
+      mediaEncryption: setupState.mediaEncryption.wireName,
+      audioCodecs: setupState.audioCodecs
+          .where((c) => setupState.enabledCodecs.contains(c))
+          .map((c) => c.wireName)
+          .toList(),
+      mediaNat: setupState.mediaNat.name,
+      useRportSignalling: setupState.useRportSignalling,
+      useRportMedia: setupState.useRportMedia,
+      stunServer: _stunCtrl.text.trim(),
+      stunPort: int.tryParse(_stunPortCtrl.text.trim()) ?? 3478,
+      stunRefreshPeriod: int.tryParse(_stunRefreshPeriodCtrl.text.trim()) ?? 30,
+      stunAllowPrivateAddress: setupState.stunAllowPrivateAddress,
+      stunAllowPrivateServer: setupState.stunAllowPrivateServer,
+      stunDnsSrv: setupState.stunDnsSrv,
+      turnServer: _turnServerCtrl.text.trim(),
+      turnPort: int.tryParse(_turnPortCtrl.text.trim()) ?? 3478,
+      turnUsername: _turnUsernameCtrl.text.trim(),
+      turnPassword: _turnPasswordCtrl.text,
+      iceEnabled: setupState.iceEnabled,
+      iceAggressiveNomination: setupState.iceAggressiveNomination,
+      iceKeepAliveInterval: int.tryParse(_iceKeepAliveIntervalCtrl.text.trim()) ?? 15,
+      savedAt: DateTime.now(),
+    );
+
+    context.read<UserProfilesBloc>().add(UserProfileSave(profile));
 
     setupBloc.add(
       SetupSubmit(
@@ -480,6 +549,14 @@ class _SetupFormState extends State<_SetupForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        UserProfilesPanel(
+                          onLoad: (profile) {
+                            context
+                                .read<SetupBloc>()
+                                .add(SetupLoadFromProfile(profile));
+                          },
+                        ),
+                        const SizedBox(height: 16),
                         _buildHeaderBanner(colorScheme, theme),
                         const SizedBox(height: 24),
 
@@ -638,27 +715,7 @@ class _SetupFormState extends State<_SetupForm> {
                     SetupChangeTransport(SipTransport.fromString(val)),
                   ),
                 ),
-                const SizedBox(height: 20),
-                _segmentLabel(AppConstants.labelNatTraversal),
-                SegmentControl(
-                  options: AppConstants.natOptions
-                      .map((n) => n.wireName)
-                      .toList(),
-                  labels: AppConstants.natOptions.map((n) => n.label).toList(),
-                  selected: setupState.mediaNat.wireName,
-                  enabled: !sipState.isRegistered,
-                  onChanged: (val) => context.read<SetupBloc>().add(
-                    SetupChangeMediaNat(MediaNat.fromString(val)),
-                  ),
-                ),
-                if (setupState.mediaNat != MediaNat.none) ...[
-                  const SizedBox(height: 16),
-                  _buildNatTraversalConfigArea(
-                    setupState,
-                    sipState,
-                    colorScheme,
-                  ),
-                ],
+
                 const SizedBox(height: 20),
                 _segmentLabel(AppConstants.labelMediaEncryption),
                 const SizedBox(height: 8),
@@ -1126,6 +1183,7 @@ class _SetupFormState extends State<_SetupForm> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildNatTraversalConfigArea(
     SetupState setupState,
     SipState sipState,
