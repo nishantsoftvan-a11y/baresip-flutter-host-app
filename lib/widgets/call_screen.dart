@@ -221,63 +221,128 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
     final isEstablished = state.callState == CallState.established;
     final isHeld = state.callState == CallState.held;
 
-    return Column(
+    return Stack(
       children: [
-        const SizedBox(height: 50),
+        Column(
+          children: [
+            const SizedBox(height: 20),
 
-        // Status label
-        Text(
-          state.callLabel,
-          style: theme.textTheme.titleMedium?.copyWith(
-            color: isEstablished
-                ? colorScheme.primary
-                : colorScheme.onSurfaceVariant,
-            fontWeight: isEstablished ? FontWeight.bold : FontWeight.normal,
-            letterSpacing: 1.5,
-            fontFeatures: isEstablished
-                ? const [FontFeature.tabularFigures()]
-                : null,
-          ),
-        ),
-
-        const SizedBox(height: 24),
-
-        // Avatar
-        _Avatar(uri: state.callPeerUri, size: 80),
-        const SizedBox(height: 16),
-
-        // Peer URI
-        Text(
-          _formatUri(state.callPeerUri),
-          style: theme.textTheme.headlineSmall?.copyWith(
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.bold,
-          ),
-          textAlign: TextAlign.center,
-        ),
-
-        if (isHeld)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'Call on hold',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.tertiary,
-                fontWeight: FontWeight.w500,
+            // Held call banner (if any call is put on hold)
+            if (state.hasHeldCall)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.pause_circle_filled, color: colorScheme.onSecondaryContainer),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Call on hold', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: colorScheme.onSecondaryContainer)),
+                            Text(_formatUri(state.heldCalls.last.peerUri), style: TextStyle(fontSize: 14, color: colorScheme.onSecondaryContainer)),
+                          ],
+                        ),
+                      ],
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () => bloc.add(const SwapCallsSip()),
+                      icon: const Icon(Icons.swap_calls, size: 18),
+                      label: const Text('Swap'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+
+            const SizedBox(height: 20),
+
+            // Status label
+            if (state.hasCallFailure)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.error_outline, color: colorScheme.onErrorContainer, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      state.callFailureReason!,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: colorScheme.onErrorContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Text(
+                state.callLabel,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: isEstablished
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
+                  fontWeight: isEstablished ? FontWeight.bold : FontWeight.normal,
+                  letterSpacing: 1.5,
+                  fontFeatures: isEstablished
+                      ? const [FontFeature.tabularFigures()]
+                      : null,
+                ),
+              ),
+
+            const SizedBox(height: 24),
+
+            // Avatar
+            _Avatar(uri: state.callPeerUri, size: 80),
+            const SizedBox(height: 16),
+
+            // Peer URI
+            Text(
+              _formatUri(state.callPeerUri),
+              style: theme.textTheme.headlineSmall?.copyWith(
+                color: colorScheme.onSurface,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
 
-        const SizedBox(height: 12),
+            if (isHeld)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Call on hold',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.tertiary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
 
-        // ── Stats toggle & panel ─────────────────────────────────────────
-        if (isEstablished || isHeld) ..._buildStatsSection(colorScheme),
+            const SizedBox(height: 12),
 
-        const Spacer(),
+            // ── Stats toggle & panel ─────────────────────────────────────────
+            if (isEstablished || isHeld) ..._buildStatsSection(colorScheme),
 
-        // Control buttons
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+            const Spacer(),
+
+            // Control buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
               // Row 1: mute, speaker
@@ -358,8 +423,66 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
           ),
         ),
       ],
-    );
-  }
+    ),
+
+    // Incoming Call Banner Overlay (2nd call)
+    if (state.incomingCall != null)
+      Positioned(
+        top: 20,
+        left: 16,
+        right: 16,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(16),
+          color: colorScheme.surfaceContainerHighest,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    _Avatar(uri: state.incomingCall!.peerUri, size: 44),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Incoming Call...', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary, fontSize: 12)),
+                          Text(_formatUri(state.incomingCall!.peerUri), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => bloc.add(RejectCallSip(state.incomingCall!.callId)),
+                      icon: Icon(Icons.call_end, color: colorScheme.error, size: 18),
+                      label: Text('Decline', style: TextStyle(color: colorScheme.error)),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () => bloc.add(AnswerCallSip(state.incomingCall!.callId)),
+                      icon: const Icon(Icons.call, size: 18),
+                      label: const Text('Answer & Hold'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade600,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+}
 
   List<Widget> _buildStatsSection(ColorScheme colorScheme) {
     return [

@@ -13,7 +13,6 @@ import '../widgets/segment_control.dart';
 import '../widgets/text_label_field.dart';
 import '../utils/file_picker_helper.dart';
 import '../features/user_profiles/widgets/user_profiles_panel.dart';
-
 // ── SetupScreen entry ─────────────────────────────────────────────────────────
 
 class SetupScreen extends StatelessWidget {
@@ -85,6 +84,10 @@ class _SetupFormState extends State<_SetupForm> {
 
   // Track last synced token to avoid redundant controller updates
   int _lastSyncToken = 0;
+
+  // Secret 7-tap toggle for NAT configuration & User Profiles storage
+  int _bannerTapCount = 0;
+  bool _showSecretNatAndUserStorage = false;
 
   @override
   void dispose() {
@@ -436,59 +439,6 @@ class _SetupFormState extends State<_SetupForm> {
     await _requestPermissions();
     if (!mounted) return;
 
-    final username = _usernameCtrl.text.trim();
-    final mtlsAlias = _mtlsAliasCtrl.text.trim();
-    final host = _hostCtrl.text.trim();
-    final port = int.tryParse(_portCtrl.text.trim()) ?? 5061;
-
-    final profile = UserProfile(
-      id: UserProfile.buildId(
-        username: username,
-        mtlsAlias: mtlsAlias,
-        host: host,
-        port: port,
-      ),
-      displayName: _displayNameCtrl.text.trim(),
-      username: username,
-      password: _passwordCtrl.text,
-      host: host,
-      port: port,
-      transport: setupState.transport.wireName,
-      authUsername: _authUsernameCtrl.text.trim(),
-      useMtls: setupState.useMtls,
-      useCsr: setupState.useCsr,
-      mtlsAlias: mtlsAlias,
-      caCertPem: _caCertCtrl.text.trim(),
-      clientCertPem: _clientCertCtrl.text.trim(),
-      privateKeyPem: _privateKeyCtrl.text.trim(),
-      enrollmentUrl: _enrollmentUrlCtrl.text.trim(),
-      authToken: _authTokenCtrl.text.trim(),
-      mediaEncryption: setupState.mediaEncryption.wireName,
-      audioCodecs: setupState.audioCodecs
-          .where((c) => setupState.enabledCodecs.contains(c))
-          .map((c) => c.wireName)
-          .toList(),
-      mediaNat: setupState.mediaNat.name,
-      useRportSignalling: setupState.useRportSignalling,
-      useRportMedia: setupState.useRportMedia,
-      stunServer: _stunCtrl.text.trim(),
-      stunPort: int.tryParse(_stunPortCtrl.text.trim()) ?? 3478,
-      stunRefreshPeriod: int.tryParse(_stunRefreshPeriodCtrl.text.trim()) ?? 30,
-      stunAllowPrivateAddress: setupState.stunAllowPrivateAddress,
-      stunAllowPrivateServer: setupState.stunAllowPrivateServer,
-      stunDnsSrv: setupState.stunDnsSrv,
-      turnServer: _turnServerCtrl.text.trim(),
-      turnPort: int.tryParse(_turnPortCtrl.text.trim()) ?? 3478,
-      turnUsername: _turnUsernameCtrl.text.trim(),
-      turnPassword: _turnPasswordCtrl.text,
-      iceEnabled: setupState.iceEnabled,
-      iceAggressiveNomination: setupState.iceAggressiveNomination,
-      iceKeepAliveInterval: int.tryParse(_iceKeepAliveIntervalCtrl.text.trim()) ?? 15,
-      savedAt: DateTime.now(),
-    );
-
-    context.read<UserProfilesBloc>().add(UserProfileSave(profile));
-
     setupBloc.add(
       SetupSubmit(
         username: _usernameCtrl.text,
@@ -517,6 +467,127 @@ class _SetupFormState extends State<_SetupForm> {
         turnPassword: _turnPasswordCtrl.text,
         iceAggressiveNomination: setupState.iceAggressiveNomination,
         iceKeepAliveInterval: _iceKeepAliveIntervalCtrl.text,
+      ),
+    );
+
+    // Save profile to UserStorage system if feature is unlocked
+    if (_showSecretNatAndUserStorage) {
+      _saveCurrentProfileToStorage();
+    }
+  }
+
+  void _saveCurrentProfileToStorage() {
+    final setupBloc = context.read<SetupBloc>();
+    final setupState = setupBloc.state;
+    final username = _usernameCtrl.text.trim();
+    final mtlsAlias = _mtlsAliasCtrl.text.trim();
+    final host = _hostCtrl.text.trim();
+    final port = int.tryParse(_portCtrl.text.trim()) ?? 5061;
+
+    if (username.isEmpty && mtlsAlias.isEmpty && host.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please enter at least Username or Host to save profile',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final profile = UserProfile(
+      id: UserProfile.buildId(
+        username: username,
+        mtlsAlias: mtlsAlias,
+        host: host,
+        port: port,
+      ),
+      displayName: _displayNameCtrl.text.trim().isNotEmpty
+          ? _displayNameCtrl.text.trim()
+          : (username.isNotEmpty
+                ? username
+                : (mtlsAlias.isNotEmpty ? mtlsAlias : 'SIP Account')),
+      username: username,
+      password: _passwordCtrl.text,
+      host: host,
+      port: port,
+      transport: setupState.transport.name,
+      authUsername: _authUsernameCtrl.text.trim(),
+      useMtls: setupState.useMtls,
+      useCsr: setupState.useCsr,
+      mtlsAlias: mtlsAlias,
+      caCertPem: _caCertCtrl.text,
+      clientCertPem: _clientCertCtrl.text,
+      privateKeyPem: _privateKeyCtrl.text,
+      enrollmentUrl: '',
+      authToken: '',
+      mediaEncryption: setupState.mediaEncryption.name,
+      audioCodecs: setupState.audioCodecs
+          .where((c) => setupState.enabledCodecs.contains(c))
+          .map((c) => c.name)
+          .toList(),
+      mediaNat: setupState.mediaNat.name,
+      useRportSignalling: setupState.useRportSignalling,
+      useRportMedia: setupState.useRportMedia,
+      stunServer: _stunCtrl.text.trim(),
+      stunPort: int.tryParse(_stunPortCtrl.text.trim()) ?? 3478,
+      stunRefreshPeriod: int.tryParse(_stunRefreshPeriodCtrl.text.trim()) ?? 30,
+      stunAllowPrivateAddress: setupState.stunAllowPrivateAddress,
+      stunAllowPrivateServer: setupState.stunAllowPrivateServer,
+      stunDnsSrv: setupState.stunDnsSrv,
+      turnServer: _turnServerCtrl.text.trim(),
+      turnPort: int.tryParse(_turnPortCtrl.text.trim()) ?? 3478,
+      turnUsername: _turnUsernameCtrl.text.trim(),
+      turnPassword: _turnPasswordCtrl.text,
+      iceEnabled: setupState.mediaNat == MediaNat.ice,
+      iceAggressiveNomination: setupState.iceAggressiveNomination,
+      iceKeepAliveInterval:
+          int.tryParse(_iceKeepAliveIntervalCtrl.text.trim()) ?? 15,
+      savedAt: DateTime.now(),
+    );
+
+    context.read<UserProfilesBloc>().add(UserProfileSave(profile));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Profile saved to storage: "${profile.displayName}"'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _loadUserProfile(UserProfile profile) {
+    setState(() {
+      _usernameCtrl.text = profile.username;
+      _passwordCtrl.text = profile.password;
+      _displayNameCtrl.text = profile.displayName;
+      _hostCtrl.text = profile.host;
+      _portCtrl.text = profile.port.toString();
+      _authUsernameCtrl.text = profile.authUsername;
+      _mtlsAliasCtrl.text = profile.mtlsAlias;
+      _caCertCtrl.text = profile.caCertPem;
+      _clientCertCtrl.text = profile.clientCertPem;
+      _privateKeyCtrl.text = profile.privateKeyPem;
+      _stunCtrl.text = profile.stunServer;
+      _stunPortCtrl.text = profile.stunPort.toString();
+      _stunRefreshPeriodCtrl.text = profile.stunRefreshPeriod.toString();
+      _turnServerCtrl.text = profile.turnServer;
+      _turnPortCtrl.text = profile.turnPort.toString();
+      _turnUsernameCtrl.text = profile.turnUsername;
+      _turnPasswordCtrl.text = profile.turnPassword;
+      _iceKeepAliveIntervalCtrl.text = profile.iceKeepAliveInterval.toString();
+    });
+
+    context.read<SetupBloc>().add(SetupLoadFromProfile(profile));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Loaded profile: "${profile.displayName.isNotEmpty ? profile.displayName : profile.id}"',
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -549,15 +620,13 @@ class _SetupFormState extends State<_SetupForm> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        UserProfilesPanel(
-                          onLoad: (profile) {
-                            context
-                                .read<SetupBloc>()
-                                .add(SetupLoadFromProfile(profile));
-                          },
-                        ),
-                        const SizedBox(height: 16),
                         _buildHeaderBanner(colorScheme, theme),
+                        if (_showSecretNatAndUserStorage) ...[
+                          const SizedBox(height: 16),
+                          UserProfilesPanel(
+                            onLoad: (profile) => _loadUserProfile(profile),
+                          ),
+                        ],
                         const SizedBox(height: 24),
 
                         _buildEndpointIdentityCard(
@@ -571,6 +640,15 @@ class _SetupFormState extends State<_SetupForm> {
                           sipState,
                           colorScheme,
                         ),
+                        if (_showSecretNatAndUserStorage &&
+                            setupState.mediaNat != MediaNat.none) ...[
+                          const SizedBox(height: 24),
+                          _buildNatTraversalConfigArea(
+                            setupState,
+                            sipState,
+                            colorScheme,
+                          ),
+                        ],
                         const SizedBox(height: 24),
                         _buildMtlsSecurityCard(
                           setupState,
@@ -601,27 +679,50 @@ class _SetupFormState extends State<_SetupForm> {
   // ── Sub-component widget builder methods ───────────────────────────────────
 
   Widget _buildHeaderBanner(ColorScheme colorScheme, ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.lock_person, color: colorScheme.primary, size: 24),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              'Set up your SIP endpoint credentials, TLS parameters, NAT options, or mutual TLS certs below.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                height: 1.4,
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () {
+        setState(() {
+          _bannerTapCount++;
+          if (_bannerTapCount >= 7) {
+            _showSecretNatAndUserStorage = !_showSecretNatAndUserStorage;
+            _bannerTapCount = 0;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  _showSecretNatAndUserStorage
+                      ? '🔓 Advanced NAT & Saved Profiles unlocked!'
+                      : '🔒 NAT & Saved Profiles hidden',
+                ),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.primaryContainer.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colorScheme.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.lock_person, color: colorScheme.primary, size: 24),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                'Set up your SIP endpoint credentials, TLS parameters, NAT options, or mutual TLS certs below.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -715,6 +816,29 @@ class _SetupFormState extends State<_SetupForm> {
                     SetupChangeTransport(SipTransport.fromString(val)),
                   ),
                 ),
+
+                if (_showSecretNatAndUserStorage) ...[
+                  const SizedBox(height: 20),
+                  _segmentLabel(AppConstants.labelNatTraversal),
+                  SegmentControl(
+                    options: AppConstants.natOptions
+                        .map((n) => n.name)
+                        .toList(),
+                    labels: AppConstants.natOptions
+                        .map((n) => n.name.toUpperCase())
+                        .toList(),
+                    selected: setupState.mediaNat.name,
+                    enabled: !sipState.isRegistered,
+                    onChanged: (val) => context.read<SetupBloc>().add(
+                      SetupChangeMediaNat(
+                        MediaNat.values.firstWhere(
+                          (e) => e.name == val,
+                          orElse: () => MediaNat.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 20),
                 _segmentLabel(AppConstants.labelMediaEncryption),
@@ -1016,40 +1140,102 @@ class _SetupFormState extends State<_SetupForm> {
     SipState sipState,
     ColorScheme colorScheme,
   ) {
-    return CustomButton(
-      type: CustomButtonType.filled,
-      backgroundColor: sipState.isRegistered
-          ? colorScheme.error
-          : colorScheme.primary,
-      foregroundColor: sipState.isRegistered
-          ? colorScheme.onError
-          : colorScheme.onPrimary,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      onPressed: sipState.isBusy
-          ? null
-          : (sipState.isRegistered
-                ? () =>
-                      context.read<SipBloc>().add(const UnregisterAndResetSip())
-                : () => _submit(context)),
-      child: sipState.isBusy
-          ? SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: sipState.isRegistered
-                    ? colorScheme.onError
-                    : colorScheme.onPrimary,
+    if (!_showSecretNatAndUserStorage || sipState.isRegistered) {
+      return CustomButton(
+        type: CustomButtonType.filled,
+        backgroundColor: sipState.isRegistered
+            ? colorScheme.error
+            : colorScheme.primary,
+        foregroundColor: sipState.isRegistered
+            ? colorScheme.onError
+            : colorScheme.onPrimary,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        onPressed: sipState.isBusy
+            ? null
+            : (sipState.isRegistered
+                  ? () => context.read<SipBloc>().add(
+                      const UnregisterAndResetSip(),
+                    )
+                  : () => _submit(context)),
+        child: sipState.isBusy
+            ? SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: sipState.isRegistered
+                      ? colorScheme.onError
+                      : colorScheme.onPrimary,
+                ),
+              )
+            : Text(
+                sipState.isRegistered ? 'Unregister' : 'Connect',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
               ),
-            )
-          : Text(
-              sipState.isRegistered ? 'Unregister' : 'Save & Connect',
-              style: const TextStyle(
-                fontSize: 16,
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          flex: 1,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              side: BorderSide(color: colorScheme.primary),
+            ),
+            onPressed: _saveCurrentProfileToStorage,
+            icon: Icon(
+              Icons.bookmark_add_outlined,
+              color: colorScheme.primary,
+              size: 18,
+            ),
+            label: Text(
+              'Save Profile',
+              style: TextStyle(
+                fontSize: 13,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
+                color: colorScheme.primary,
               ),
             ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: CustomButton(
+            type: CustomButtonType.filled,
+            backgroundColor: colorScheme.primary,
+            foregroundColor: colorScheme.onPrimary,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            onPressed: sipState.isBusy ? null : () => _submit(context),
+            child: sipState.isBusy
+                ? SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: colorScheme.onPrimary,
+                    ),
+                  )
+                : const Text(
+                    'Connect',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1183,7 +1369,6 @@ class _SetupFormState extends State<_SetupForm> {
     );
   }
 
-  // ignore: unused_element
   Widget _buildNatTraversalConfigArea(
     SetupState setupState,
     SipState sipState,
@@ -1332,45 +1517,39 @@ class _SetupFormState extends State<_SetupForm> {
     SipState sipState,
     ColorScheme colorScheme,
   ) {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          flex: 3,
-          child: TextLabelField(
-            controller: _stunCtrl,
-            label: "STUN Server",
-            icon: Icons.dns_outlined,
-            hint: "e.g. stun.l.google.com",
-            enabled: !sipState.isRegistered,
-            validator: (v) {
-              if (v == null || v.trim().isEmpty) {
-                return 'STUN server is required';
-              }
-              return null;
-            },
-          ),
+        TextLabelField(
+          controller: _stunCtrl,
+          label: "STUN Server",
+          icon: Icons.dns_outlined,
+          hint: "e.g. stun.l.google.com",
+          enabled: !sipState.isRegistered,
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) {
+              return 'STUN server is required';
+            }
+            return null;
+          },
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 1,
-          child: TextLabelField(
-            controller: _stunPortCtrl,
-            label: "Port",
-            icon: Icons.numbers_outlined,
-            hint: "3478",
-            keyboardType: TextInputType.number,
-            enabled: !sipState.isRegistered,
-            validator: (v) {
-              if (v != null && v.isNotEmpty) {
-                final val = int.tryParse(v);
-                if (val == null || val < 1 || val > 65535) {
-                  return 'Invalid';
-                }
+        const SizedBox(height: 12),
+        TextLabelField(
+          controller: _stunPortCtrl,
+          label: "STUN Port",
+          icon: Icons.numbers_outlined,
+          hint: "3478",
+          keyboardType: TextInputType.number,
+          enabled: !sipState.isRegistered,
+          validator: (v) {
+            if (v != null && v.isNotEmpty) {
+              final val = int.tryParse(v);
+              if (val == null || val < 1 || val > 65535) {
+                return 'Invalid port (1-65535)';
               }
-              return null;
-            },
-          ),
+            }
+            return null;
+          },
         ),
       ],
     );
@@ -1384,83 +1563,63 @@ class _SetupFormState extends State<_SetupForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: TextLabelField(
-                controller: _turnServerCtrl,
-                label: "TURN Server",
-                icon: Icons.dns_outlined,
-                hint: "e.g. turn.example.com",
-                enabled: !sipState.isRegistered,
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'TURN server is required';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 1,
-              child: TextLabelField(
-                controller: _turnPortCtrl,
-                label: "Port",
-                icon: Icons.numbers_outlined,
-                hint: "3478",
-                keyboardType: TextInputType.number,
-                enabled: !sipState.isRegistered,
-                validator: (v) {
-                  if (v != null && v.isNotEmpty) {
-                    final val = int.tryParse(v);
-                    if (val == null || val < 1 || val > 65535) {
-                      return 'Invalid';
-                    }
-                  }
-                  return null;
-                },
-              ),
-            ),
-          ],
+        TextLabelField(
+          controller: _turnServerCtrl,
+          label: "TURN Server",
+          icon: Icons.dns_outlined,
+          hint: "e.g. turn.example.com",
+          enabled: !sipState.isRegistered,
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) {
+              return 'TURN server is required';
+            }
+            return null;
+          },
         ),
         const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: TextLabelField(
-                controller: _turnUsernameCtrl,
-                label: "TURN Username",
-                icon: Icons.person_outline,
-                enabled: !sipState.isRegistered,
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Username is required';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextLabelField(
-                controller: _turnPasswordCtrl,
-                obscureText: true,
-                label: "TURN Password",
-                icon: Icons.lock_outline,
-                enabled: !sipState.isRegistered,
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Password is required';
-                  }
-                  return null;
-                },
-              ),
-            ),
-          ],
+        TextLabelField(
+          controller: _turnPortCtrl,
+          label: "TURN Port",
+          icon: Icons.numbers_outlined,
+          hint: "3478",
+          keyboardType: TextInputType.number,
+          enabled: !sipState.isRegistered,
+          validator: (v) {
+            if (v != null && v.isNotEmpty) {
+              final val = int.tryParse(v);
+              if (val == null || val < 1 || val > 65535) {
+                return 'Invalid port (1-65535)';
+              }
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 12),
+        TextLabelField(
+          controller: _turnUsernameCtrl,
+          label: "TURN Username",
+          icon: Icons.person_outline,
+          enabled: !sipState.isRegistered,
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) {
+              return 'Username is required';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 12),
+        TextLabelField(
+          controller: _turnPasswordCtrl,
+          obscureText: true,
+          label: "TURN Password",
+          icon: Icons.lock_outline,
+          enabled: !sipState.isRegistered,
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) {
+              return 'Password is required';
+            }
+            return null;
+          },
         ),
       ],
     );
@@ -1475,47 +1634,36 @@ class _SetupFormState extends State<_SetupForm> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ICE uses STUN to gather candidate list
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: TextLabelField(
-                controller: _stunCtrl,
-                label: "ICE STUN Server",
-                icon: Icons.dns_outlined,
-                hint: "e.g. stun.l.google.com",
-                enabled: !sipState.isRegistered,
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'STUN server is required';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 1,
-              child: TextLabelField(
-                controller: _stunPortCtrl,
-                label: "Port",
-                icon: Icons.numbers_outlined,
-                hint: "3478",
-                keyboardType: TextInputType.number,
-                enabled: !sipState.isRegistered,
-                validator: (v) {
-                  if (v != null && v.isNotEmpty) {
-                    final val = int.tryParse(v);
-                    if (val == null || val < 1 || val > 65535) {
-                      return 'Invalid';
-                    }
-                  }
-                  return null;
-                },
-              ),
-            ),
-          ],
+        TextLabelField(
+          controller: _stunCtrl,
+          label: "ICE STUN Server",
+          icon: Icons.dns_outlined,
+          hint: "e.g. stun.l.google.com",
+          enabled: !sipState.isRegistered,
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) {
+              return 'STUN server is required';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 12),
+        TextLabelField(
+          controller: _stunPortCtrl,
+          label: "STUN Port",
+          icon: Icons.numbers_outlined,
+          hint: "3478",
+          keyboardType: TextInputType.number,
+          enabled: !sipState.isRegistered,
+          validator: (v) {
+            if (v != null && v.isNotEmpty) {
+              final val = int.tryParse(v);
+              if (val == null || val < 1 || val > 65535) {
+                return 'Invalid port (1-65535)';
+              }
+            }
+            return null;
+          },
         ),
         const SizedBox(height: 12),
         const Divider(height: 20),
@@ -1538,56 +1686,36 @@ class _SetupFormState extends State<_SetupForm> {
             ],
           ),
         ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: TextLabelField(
-                controller: _turnServerCtrl,
-                label: "TURN Relay Server",
-                icon: Icons.dns_outlined,
-                hint: "e.g. turn.example.com",
-                enabled: !sipState.isRegistered,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 1,
-              child: TextLabelField(
-                controller: _turnPortCtrl,
-                label: "Port",
-                icon: Icons.numbers_outlined,
-                hint: "3478",
-                keyboardType: TextInputType.number,
-                enabled: !sipState.isRegistered,
-              ),
-            ),
-          ],
+        TextLabelField(
+          controller: _turnServerCtrl,
+          label: "TURN Relay Server",
+          icon: Icons.dns_outlined,
+          hint: "e.g. turn.example.com",
+          enabled: !sipState.isRegistered,
         ),
         const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: TextLabelField(
-                controller: _turnUsernameCtrl,
-                label: "TURN Username",
-                icon: Icons.person_outline,
-                enabled: !sipState.isRegistered,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextLabelField(
-                controller: _turnPasswordCtrl,
-                obscureText: true,
-                label: "TURN Password",
-                icon: Icons.lock_outline,
-                enabled: !sipState.isRegistered,
-              ),
-            ),
-          ],
+        TextLabelField(
+          controller: _turnPortCtrl,
+          label: "TURN Port",
+          icon: Icons.numbers_outlined,
+          hint: "3478",
+          keyboardType: TextInputType.number,
+          enabled: !sipState.isRegistered,
+        ),
+        const SizedBox(height: 12),
+        TextLabelField(
+          controller: _turnUsernameCtrl,
+          label: "TURN Username",
+          icon: Icons.person_outline,
+          enabled: !sipState.isRegistered,
+        ),
+        const SizedBox(height: 12),
+        TextLabelField(
+          controller: _turnPasswordCtrl,
+          obscureText: true,
+          label: "TURN Password",
+          icon: Icons.lock_outline,
+          enabled: !sipState.isRegistered,
         ),
 
         const SizedBox(height: 12),
@@ -1634,38 +1762,22 @@ class _SetupFormState extends State<_SetupForm> {
               ),
               const Divider(),
               const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      "ICE Keep Alive Interval (s)",
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 100,
-                    child: TextLabelField(
-                      controller: _iceKeepAliveIntervalCtrl,
-                      label: "Interval",
-                      icon: Icons.timer_outlined,
-                      hint: "15",
-                      keyboardType: TextInputType.number,
-                      enabled: !sipState.isRegistered,
-                      validator: (v) {
-                        if (v != null && v.isNotEmpty) {
-                          final val = int.tryParse(v);
-                          if (val == null || val <= 0) {
-                            return 'Invalid';
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                ],
+              TextLabelField(
+                controller: _iceKeepAliveIntervalCtrl,
+                label: "ICE Keep Alive Interval (s)",
+                icon: Icons.timer_outlined,
+                hint: "15",
+                keyboardType: TextInputType.number,
+                enabled: !sipState.isRegistered,
+                validator: (v) {
+                  if (v != null && v.isNotEmpty) {
+                    final val = int.tryParse(v);
+                    if (val == null || val <= 0) {
+                      return 'Invalid interval';
+                    }
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 4),
             ],
@@ -1692,29 +1804,22 @@ class _SetupFormState extends State<_SetupForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextLabelField(
-                  controller: _stunRefreshPeriodCtrl,
-                  label: "STUN Refresh Period (s)",
-                  icon: Icons.refresh_outlined,
-                  hint: "30",
-                  keyboardType: TextInputType.number,
-                  enabled: !sipState.isRegistered,
-                  validator: (v) {
-                    if (v != null && v.isNotEmpty) {
-                      final val = int.tryParse(v);
-                      if (val == null || val <= 0) {
-                        return 'Must be > 0';
-                      }
-                    }
-                    return null;
-                  },
-                ),
-              ),
-            ],
+          TextLabelField(
+            controller: _stunRefreshPeriodCtrl,
+            label: "STUN Refresh Period (s)",
+            icon: Icons.refresh_outlined,
+            hint: "30",
+            keyboardType: TextInputType.number,
+            enabled: !sipState.isRegistered,
+            validator: (v) {
+              if (v != null && v.isNotEmpty) {
+                final val = int.tryParse(v);
+                if (val == null || val <= 0) {
+                  return 'Must be > 0';
+                }
+              }
+              return null;
+            },
           ),
           const SizedBox(height: 6),
           const Divider(),

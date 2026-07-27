@@ -5,6 +5,19 @@ import 'package:sipsdk_flutter/sipsdk_flutter.dart';
 
 // ── SipState ─────────────────────────────────────────────────────────────────
 
+class CallInfo {
+  final int callId;
+  final String peerUri;
+  final CallState state;
+  final bool isOnHold;
+  const CallInfo({
+    required this.callId,
+    required this.peerUri,
+    required this.state,
+    this.isOnHold = false,
+  });
+}
+
 class SipState {
   final SipConfig? config;
   final RegistrationState regState;
@@ -19,6 +32,11 @@ class SipState {
   final bool networkConnected;
   final String? lastError;
   final bool isBusy;
+  final String? callFailureReason;
+
+  // Multi-call support
+  final CallInfo? incomingCall;
+  final List<CallInfo> heldCalls;
 
   // mTLS
   final MtlsResult? lastMtlsResult;
@@ -40,6 +58,9 @@ class SipState {
     this.networkConnected = true,
     this.lastError,
     this.isBusy = false,
+    this.callFailureReason,
+    this.incomingCall,
+    this.heldCalls = const [],
     this.lastMtlsResult,
     this.mtlsCertInfo,
     this.lastMtlsError,
@@ -60,6 +81,9 @@ class SipState {
     bool? networkConnected,
     String? Function()? lastError,
     bool? isBusy,
+    String? Function()? callFailureReason,
+    CallInfo? Function()? incomingCall,
+    List<CallInfo>? heldCalls,
     MtlsResult? Function()? lastMtlsResult,
     CertificateInfo? Function()? mtlsCertInfo,
     MtlsErrorEvent? Function()? lastMtlsError,
@@ -79,6 +103,9 @@ class SipState {
       networkConnected: networkConnected ?? this.networkConnected,
       lastError: lastError != null ? lastError() : this.lastError,
       isBusy: isBusy ?? this.isBusy,
+      callFailureReason: callFailureReason != null ? callFailureReason() : this.callFailureReason,
+      incomingCall: incomingCall != null ? incomingCall() : this.incomingCall,
+      heldCalls: heldCalls ?? this.heldCalls,
       lastMtlsResult: lastMtlsResult != null
           ? lastMtlsResult()
           : this.lastMtlsResult,
@@ -93,10 +120,12 @@ class SipState {
   }
 
   bool get isRegistered => regState == RegistrationState.registered;
-  bool get isCallAlive => callState != null && callState != CallState.closed;
+  bool get isCallAlive => (callState != null) || incomingCall != null || heldCalls.isNotEmpty;
   bool get isInCall => isCallAlive;
   bool get isCallActive => callState == CallState.established;
-  bool get hasIncoming => callState == CallState.incoming;
+  bool get hasIncoming => callState == CallState.incoming || incomingCall != null;
+  bool get hasHeldCall => heldCalls.isNotEmpty;
+  bool get hasCallFailure => callFailureReason != null && callFailureReason!.isNotEmpty;
 
   String get regLabel {
     switch (regState) {
@@ -114,6 +143,9 @@ class SipState {
   }
 
   String get callLabel {
+    if (hasCallFailure) {
+      return callFailureReason!;
+    }
     switch (callState) {
       case CallState.incoming:
         return 'Incoming call';
@@ -126,6 +158,7 @@ class SipState {
       case CallState.held:
         return 'On hold';
       case CallState.closed:
+        return 'Call ended';
       case null:
         return '';
     }
@@ -194,15 +227,22 @@ class StartCallSip extends SipEvent {
 }
 
 class AnswerCallSip extends SipEvent {
-  const AnswerCallSip();
+  final int? callId;
+  const AnswerCallSip([this.callId]);
 }
 
 class RejectCallSip extends SipEvent {
-  const RejectCallSip();
+  final int? callId;
+  const RejectCallSip([this.callId]);
 }
 
 class HangupCallSip extends SipEvent {
-  const HangupCallSip();
+  final int? callId;
+  const HangupCallSip([this.callId]);
+}
+
+class SwapCallsSip extends SipEvent {
+  const SwapCallsSip();
 }
 
 class ToggleMuteSip extends SipEvent {
@@ -280,6 +320,10 @@ class _TickDurationSip extends SipEvent {
   const _TickDurationSip();
 }
 
+class _OnDismissCallFailureSip extends SipEvent {
+  const _OnDismissCallFailureSip();
+}
+
 // ── SipBloc ──────────────────────────────────────────────────────────────────
 
 class SipBloc extends Bloc<SipEvent, SipState> {
@@ -301,6 +345,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     on<AnswerCallSip>(_onAnswerCall);
     on<RejectCallSip>(_onRejectCall);
     on<HangupCallSip>(_onHangupCall);
+    on<SwapCallsSip>(_onSwapCalls);
     on<ToggleMuteSip>(_onToggleMute);
     on<ToggleHoldSip>(_onToggleHold);
     on<ToggleSpeakerSip>(_onToggleSpeaker);
@@ -312,14 +357,25 @@ class SipBloc extends Bloc<SipEvent, SipState> {
 
     // Internal updates
     on<_OnRegistrationStateChanged>(_onRegistrationStateChanged);
+    on<_OnDismissCallFailureSip>(_onDismissCallFailure);
 
     on<_OnCallStateChanged>(_onCallStateUpdated);
     on<_OnAudioRouteChanged>(
       (event, emit) => emit(state.copyWith(currentRoute: event.event.route)),
     );
     on<_OnNetworkStateChanged>(
-      (event, emit) =>
-          emit(state.copyWith(networkConnected: event.event.connected)),
+      (event, emit) {
+        final isConnected = event.event.connected;
+        if (!isConnected) {
+          emit(state.copyWith(
+            networkConnected: false,
+            regState: RegistrationState.failed,
+            regReason: 'Network Offline',
+          ));
+        } else {
+          emit(state.copyWith(networkConnected: true));
+        }
+      },
     );
     on<_OnErrorOccurred>(_onErrorOccurred);
     on<_OnMtlsErrorOccurred>(
@@ -546,12 +602,40 @@ class SipBloc extends Bloc<SipEvent, SipState> {
   }
 
   Future<void> _onStartCall(StartCallSip event, Emitter<SipState> emit) async {
+    _failureDismissTimer?.cancel();
+
+    // Verify microphone permission before initiating call / sending SIP INVITE
+    final micStatus = await Permission.microphone.status;
+    if (!micStatus.isGranted) {
+      final reqResult = await Permission.microphone.request();
+      if (!reqResult.isGranted) {
+        const reason = 'Microphone permission is required to place calls. Please grant permission in Settings.';
+        emit(state.copyWith(
+          callState: () => CallState.closed,
+          callFailureReason: () => reason,
+          lastError: () => 'Microphone permission denied.',
+        ));
+        _scheduleFailureDismissTimer();
+        return; // Abort call attempt before sending SIP INVITE
+      }
+    }
+
     final uri = _buildSipUri(event.peerUri);
-    emit(state.copyWith(isBusy: true));
+    emit(state.copyWith(
+      callState: () => CallState.outgoing,
+      callPeerUri: uri,
+      callFailureReason: () => null,
+      isBusy: true,
+    ));
     try {
       await _client.startCall(uri);
     } catch (e) {
-      emit(state.copyWith(lastError: () => e.toString()));
+      final reason = _formatCallFailureReason(e.toString());
+      emit(state.copyWith(
+        callState: () => CallState.closed,
+        callFailureReason: () => reason,
+      ));
+      _scheduleFailureDismissTimer();
     } finally {
       emit(state.copyWith(isBusy: false));
     }
@@ -562,7 +646,27 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     Emitter<SipState> emit,
   ) async {
     try {
-      await _client.answerCall();
+      final targetId = event.callId ?? state.incomingCall?.callId ?? (state.callState == CallState.incoming ? state.callId : null);
+      if (state.isCallActive && state.callState == CallState.established) {
+        // Current active call is moved to held list
+        final currentCall = CallInfo(
+          callId: state.callId,
+          peerUri: state.callPeerUri,
+          state: CallState.held,
+          isOnHold: true,
+        );
+        final updatedHeld = List<CallInfo>.from(state.heldCalls)..add(currentCall);
+        final incoming = state.incomingCall;
+        emit(state.copyWith(
+          heldCalls: updatedHeld,
+          callState: () => CallState.established,
+          callPeerUri: incoming?.peerUri ?? state.callPeerUri,
+          callId: incoming?.callId ?? state.callId,
+          incomingCall: () => null,
+          isOnHold: false,
+        ));
+      }
+      await _client.answerCall(callId: targetId);
     } catch (e) {
       emit(state.copyWith(lastError: () => e.toString()));
     }
@@ -573,7 +677,11 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     Emitter<SipState> emit,
   ) async {
     try {
-      await _client.rejectCall();
+      final targetId = event.callId ?? state.incomingCall?.callId ?? (state.callState == CallState.incoming ? state.callId : null);
+      if (state.incomingCall != null && (targetId == null || targetId == state.incomingCall!.callId)) {
+        emit(state.copyWith(incomingCall: () => null));
+      }
+      await _client.rejectCall(callId: targetId);
     } catch (e) {
       emit(state.copyWith(lastError: () => e.toString()));
     }
@@ -583,20 +691,52 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     HangupCallSip event,
     Emitter<SipState> emit,
   ) async {
+    _failureDismissTimer?.cancel();
+    _stopTimer();
+    emit(
+      state.copyWith(
+        callState: () => null,
+        callPeerUri: '',
+        callId: 0,
+        callDuration: Duration.zero,
+        isMuted: false,
+        isOnHold: false,
+        callFailureReason: () => null,
+        incomingCall: () => null,
+        heldCalls: const [],
+      ),
+    );
     try {
-      await _client.hangup();
+      await _client.hangup(callId: event.callId);
+    } catch (_) {}
+  }
+
+  Future<void> _onSwapCalls(
+    SwapCallsSip event,
+    Emitter<SipState> emit,
+  ) async {
+    if (state.heldCalls.isEmpty) return;
+    final currentCall = CallInfo(
+      callId: state.callId,
+      peerUri: state.callPeerUri,
+      state: CallState.held,
+      isOnHold: true,
+    );
+    final targetCall = state.heldCalls.last;
+    final newHeldList = List<CallInfo>.from(state.heldCalls.sublist(0, state.heldCalls.length - 1))..add(currentCall);
+
+    try {
+      await _client.hold(true, callId: state.callId);
+      await _client.hold(false, callId: targetCall.callId);
+      emit(state.copyWith(
+        callState: () => CallState.established,
+        callPeerUri: targetCall.peerUri,
+        callId: targetCall.callId,
+        isOnHold: false,
+        heldCalls: newHeldList,
+      ));
     } catch (e) {
-      _stopTimer();
-      emit(
-        state.copyWith(
-          callState: () => null,
-          callPeerUri: '',
-          callDuration: Duration.zero,
-          isMuted: false,
-          isOnHold: false,
-          lastError: () => e.toString(),
-        ),
-      );
+      emit(state.copyWith(lastError: () => e.toString()));
     }
   }
 
@@ -735,24 +875,67 @@ class SipBloc extends Bloc<SipEvent, SipState> {
 
   void _onCallStateUpdated(_OnCallStateChanged event, Emitter<SipState> emit) {
     final e = event.event;
+
+    if (e.state == CallState.incoming) {
+      if (state.isCallActive || state.callState == CallState.established || state.callState == CallState.held) {
+        // Second incoming call!
+        emit(
+          state.copyWith(
+            incomingCall: () => CallInfo(
+              callId: e.callId,
+              peerUri: e.peerUri,
+              state: CallState.incoming,
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
     if (e.state == CallState.closed) {
-      _stopTimer();
-      emit(
-        state.copyWith(
-          callState: () => null,
-          callPeerUri: '',
-          callId: 0,
-          callDuration: Duration.zero,
-          isMuted: false,
-          isOnHold: false,
-        ),
-      );
+      if (state.incomingCall != null && (e.callId == state.incomingCall!.callId || (e.peerUri.isNotEmpty && state.incomingCall!.peerUri == e.peerUri))) {
+        // Second incoming call was rejected/cancelled
+        emit(state.copyWith(incomingCall: () => null));
+        return;
+      }
+
+      // Check if held call can be resumed
+      final remainingHeld = state.heldCalls.where((c) => c.callId != e.callId).toList();
+      if (remainingHeld.isNotEmpty) {
+        final nextCall = remainingHeld.last;
+        final newHeldList = remainingHeld.sublist(0, remainingHeld.length - 1);
+        emit(
+          state.copyWith(
+            callState: () => CallState.established,
+            callPeerUri: nextCall.peerUri,
+            callId: nextCall.callId,
+            isOnHold: false,
+            heldCalls: newHeldList,
+          ),
+        );
+        _client.hold(false, callId: nextCall.callId).catchError((_) {});
+      } else {
+        _stopTimer();
+        final rawReason = e.peerUri.trim();
+        final reason = _formatCallFailureReason(rawReason);
+        emit(
+          state.copyWith(
+            callState: () => CallState.closed,
+            callFailureReason: () => reason,
+            isMuted: false,
+            isOnHold: false,
+          ),
+        );
+        _scheduleFailureDismissTimer();
+      }
     } else {
+      _failureDismissTimer?.cancel();
       emit(
         state.copyWith(
           callState: () => e.state,
           callPeerUri: e.peerUri,
           callId: e.callId,
+          callFailureReason: () => null,
         ),
       );
       if (e.state == CallState.established) {
@@ -774,11 +957,57 @@ class SipBloc extends Bloc<SipEvent, SipState> {
             state.callState == CallState.ringing ||
             state.callState == CallState.incoming)) {
       _stopTimer();
+      final reason = _formatCallFailureReason(event.event.message);
+      emit(
+        state.copyWith(
+          callState: () => CallState.closed,
+          callFailureReason: () => reason,
+        ),
+      );
+      _scheduleFailureDismissTimer();
+    }
+  }
+
+  String _formatCallFailureReason(String raw) {
+    final lower = raw.toLowerCase();
+    if (lower.contains('486') || lower.contains('busy')) return 'User Busy (486)';
+    if (lower.contains('404') || lower.contains('not found')) return 'User Not Found (404)';
+    if (lower.contains('408') || lower.contains('timeout')) return 'Request Timeout (408)';
+    if (lower.contains('480') || lower.contains('unavailable')) return 'User Unavailable (480)';
+    if (lower.contains('401') || lower.contains('407') || lower.contains('unauthorized')) return 'Authentication Failed';
+    if (lower.contains('not registered') || lower.contains('offline')) return 'User / SDK Not Registered';
+    if (lower.contains('declined') || lower.contains('rejected')) return 'Call Declined';
+    if (raw.trim().isNotEmpty && raw != 'Call closed' && raw != 'Normal call clearing') {
+      return raw;
+    }
+    return 'Call Ended';
+  }
+
+  Timer? _failureDismissTimer;
+
+  void _scheduleFailureDismissTimer() {
+    _failureDismissTimer?.cancel();
+    _failureDismissTimer = Timer(const Duration(seconds: 3), () {
+      if (!isClosed) {
+        add(const _OnDismissCallFailureSip());
+      }
+    });
+  }
+
+  void _onDismissCallFailure(_OnDismissCallFailureSip event, Emitter<SipState> emit) {
+    if (state.callState == CallState.closed) {
+      _stopTimer();
       emit(
         state.copyWith(
           callState: () => null,
           callPeerUri: '',
+          callId: 0,
           callDuration: Duration.zero,
+          isMuted: false,
+          isOnHold: false,
+          callFailureReason: () => null,
+          incomingCall: () => null,
+          heldCalls: const [],
         ),
       );
     }
@@ -821,6 +1050,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
 
   @override
   Future<void> close() {
+    _failureDismissTimer?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
