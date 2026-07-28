@@ -660,30 +660,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     try {
       final targetId =
           event.callId ??
-          state.incomingCall?.callId ??
           (state.callState == CallState.incoming ? state.callId : null);
-      if (state.isCallActive && state.callState == CallState.established) {
-        // Current active call is moved to held list
-        final currentCall = CallInfo(
-          callId: state.callId,
-          peerUri: state.callPeerUri,
-          state: CallState.held,
-          isOnHold: true,
-        );
-        final updatedHeld = List<CallInfo>.from(state.heldCalls)
-          ..add(currentCall);
-        final incoming = state.incomingCall;
-        emit(
-          state.copyWith(
-            heldCalls: updatedHeld,
-            callState: () => CallState.established,
-            callPeerUri: incoming?.peerUri ?? state.callPeerUri,
-            callId: incoming?.callId ?? state.callId,
-            incomingCall: () => null,
-            isOnHold: false,
-          ),
-        );
-      }
       await _client.answerCall(callId: targetId);
     } catch (e) {
       emit(state.copyWith(lastError: () => e.toString()));
@@ -724,8 +701,6 @@ class SipBloc extends Bloc<SipEvent, SipState> {
         isMuted: false,
         isOnHold: false,
         callFailureReason: () => null,
-        incomingCall: () => null,
-        heldCalls: const [],
       ),
     );
     try {
@@ -899,90 +874,24 @@ class SipBloc extends Bloc<SipEvent, SipState> {
   void _onCallStateUpdated(_OnCallStateChanged event, Emitter<SipState> emit) {
     final e = event.event;
 
-    if (e.state == CallState.incoming) {
-      if (state.isCallActive ||
-          state.callState == CallState.established ||
-          state.callState == CallState.held) {
-        // Second incoming call!
-        emit(
-          state.copyWith(
-            incomingCall: () => CallInfo(
-              callId: e.callId,
-              peerUri: e.peerUri,
-              state: CallState.incoming,
-            ),
-          ),
-        );
-        return;
-      }
-    }
-
     if (e.state == CallState.closed) {
-      if (state.incomingCall != null &&
-          (e.callId == state.incomingCall!.callId ||
-              (e.peerUri.isNotEmpty &&
-                  state.incomingCall!.peerUri == e.peerUri))) {
-        // Second incoming call was rejected/cancelled (incomingCall still present)
-        emit(state.copyWith(incomingCall: () => null));
-        return;
-      }
-
-      // Guard: if the primary call is still active/held and the closed callId does NOT match
-      // the primary call, this CLOSED event belongs to a secondary call (e.g. a rejected
-      // second incoming whose incomingCall slot was already cleared by _onRejectCall before
-      // the native CLOSED event arrived). Keep the call screen intact.
-      final isPrimaryCallActive =
-          state.callState == CallState.established ||
-          state.callState == CallState.held ||
-          state.callState == CallState.outgoing ||
-          state.callState == CallState.ringing;
-      final closedIsNotPrimary = e.callId == 0
-          ? false // callId=0 means platform didn't carry a real id; must rely on other signals
-          : e.callId != state.callId;
-      if (isPrimaryCallActive && closedIsNotPrimary) {
-        // A secondary call closed (e.g. rejected second incoming) — primary still alive.
-        emit(state.copyWith(incomingCall: () => null));
-        return;
-      }
-
-      // Check if held call can be resumed
-      final remainingHeld = state.heldCalls
-          .where((c) => c.callId != e.callId)
-          .toList();
-      if (remainingHeld.isNotEmpty) {
-        final nextCall = remainingHeld.last;
-        final newHeldList = remainingHeld.sublist(0, remainingHeld.length - 1);
-        emit(
-          state.copyWith(
-            callState: () => CallState.established,
-            callPeerUri: nextCall.peerUri,
-            callId: nextCall.callId,
-            isOnHold: false,
-            heldCalls: newHeldList,
-          ),
-        );
-        _client.hold(false, callId: nextCall.callId).catchError((_) {});
-      } else {
-        _stopTimer();
-        final rawReason = e.peerUri.trim();
-        final reason = _formatCallFailureReason(rawReason);
-        emit(
-          state.copyWith(
-            callState: () => CallState.closed,
-            callFailureReason: () => reason,
-            isMuted: false,
-            isOnHold: false,
-          ),
-        );
-        _scheduleFailureDismissTimer();
-      }
+      _stopTimer();
+      final rawReason = e.peerUri.trim();
+      final reason = _formatCallFailureReason(rawReason);
+      emit(
+        state.copyWith(
+          callState: () => CallState.closed,
+          callFailureReason: () => reason,
+          isMuted: false,
+          isOnHold: false,
+        ),
+      );
+      _scheduleFailureDismissTimer();
     } else {
       _failureDismissTimer?.cancel();
       emit(
         state.copyWith(
           callState: () => e.state,
-          // Preserve existing peerUri/callId if the event carries empty values
-          // (e.g. iOS emits ESTABLISHED with "" when resuming after secondary call closed)
           callPeerUri: e.peerUri.isNotEmpty ? e.peerUri : state.callPeerUri,
           callId: e.callId != 0 ? e.callId : state.callId,
           callFailureReason: () => null,
@@ -1184,8 +1093,6 @@ class SipBloc extends Bloc<SipEvent, SipState> {
           isMuted: false,
           isOnHold: false,
           callFailureReason: () => null,
-          incomingCall: () => null,
-          heldCalls: const [],
         ),
       );
     }
