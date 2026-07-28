@@ -227,11 +227,104 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
           children: [
             const SizedBox(height: 20),
 
+            // 2nd Incoming Call Waiting Banner
+            if (state.incomingCall != null)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.tertiaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.phone_callback,
+                          color: colorScheme.onTertiaryContainer,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Incoming Call Waiting',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: colorScheme.onTertiaryContainer,
+                                ),
+                              ),
+                              Text(
+                                _formatUri(state.incomingCall!.peerUri),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: colorScheme.onTertiaryContainer,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => bloc.add(
+                            RejectCallSip(state.incomingCall!.callId),
+                          ),
+                          icon: Icon(
+                            Icons.call_end,
+                            size: 18,
+                            color: colorScheme.error,
+                          ),
+                          label: Text(
+                            'Decline',
+                            style: TextStyle(color: colorScheme.error),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: () => bloc.add(
+                            AnswerCallSip(state.incomingCall!.callId),
+                          ),
+                          icon: const Icon(Icons.call, size: 18),
+                          label: const Text('Answer & Hold'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green.shade600,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
             // Held call banner (if any call is put on hold)
             if (state.hasHeldCall)
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: colorScheme.secondaryContainer,
                   borderRadius: BorderRadius.circular(12),
@@ -241,13 +334,29 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.pause_circle_filled, color: colorScheme.onSecondaryContainer),
+                        Icon(
+                          Icons.pause_circle_filled,
+                          color: colorScheme.onSecondaryContainer,
+                        ),
                         const SizedBox(width: 8),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Call on hold', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: colorScheme.onSecondaryContainer)),
-                            Text(_formatUri(state.heldCalls.last.peerUri), style: TextStyle(fontSize: 14, color: colorScheme.onSecondaryContainer)),
+                            Text(
+                              'Call on hold',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                            Text(
+                              _formatUri(state.heldCalls.last.peerUri),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: colorScheme.onSecondaryContainer,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -270,7 +379,10 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
             // Status label
             if (state.hasCallFailure)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: colorScheme.errorContainer,
                   borderRadius: BorderRadius.circular(20),
@@ -278,7 +390,11 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.error_outline, color: colorScheme.onErrorContainer, size: 18),
+                    Icon(
+                      Icons.error_outline,
+                      color: colorScheme.onErrorContainer,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       state.callFailureReason!,
@@ -297,7 +413,9 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                   color: isEstablished
                       ? colorScheme.primary
                       : colorScheme.onSurfaceVariant,
-                  fontWeight: isEstablished ? FontWeight.bold : FontWeight.normal,
+                  fontWeight: isEstablished
+                      ? FontWeight.bold
+                      : FontWeight.normal,
                   letterSpacing: 1.5,
                   fontFeatures: isEstablished
                       ? const [FontFeature.tabularFigures()]
@@ -343,146 +461,171 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
             // Control buttons
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              // Row 1: mute, speaker
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              child: Column(
                 children: [
-                  _ToggleButton(
-                    icon: state.isMuted ? Icons.mic_off : Icons.mic,
-                    label: state.isMuted ? 'Unmute' : 'Mute',
-                    active: state.isMuted,
-                    onTap: isEstablished || isHeld
-                        ? () => bloc.add(const ToggleMuteSip())
-                        : null,
-                  ),
-                  _ToggleButton(
-                    icon: _getRouteIcon(state.currentRoute),
-                    label: _getRouteLabel(state.currentRoute),
-                    active: state.currentRoute != AudioRoute.earpiece,
-                    onTap: isEstablished
-                        ? () => _handleSpeakerTap(context, state)
-                        : null,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Share log button (visible only when established or held)
-              if (isEstablished || isHeld)
-                TextButton.icon(
-                  onPressed: _isSharing ? null : _shareLog,
-                  icon: _isSharing
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.share, size: 18),
-                  label: Text(_isSharing ? 'Sharing…' : 'Share Call Log'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: colorScheme.primary,
-                    textStyle: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-
-              const SizedBox(height: 16),
-
-              // Hang up
-              GestureDetector(
-                onTap: () => bloc.add(const HangupCallSip()),
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: colorScheme.error,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: colorScheme.error.withValues(alpha: 0.3),
-                        blurRadius: 16,
-                        spreadRadius: 2,
+                  // Row 1: mute, speaker
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _ToggleButton(
+                        icon: state.isMuted ? Icons.mic_off : Icons.mic,
+                        label: state.isMuted ? 'Unmute' : 'Mute',
+                        active: state.isMuted,
+                        onTap: isEstablished || isHeld
+                            ? () => bloc.add(const ToggleMuteSip())
+                            : null,
+                      ),
+                      _ToggleButton(
+                        icon: _getRouteIcon(state.currentRoute),
+                        label: _getRouteLabel(state.currentRoute),
+                        active: state.currentRoute != AudioRoute.earpiece,
+                        onTap: isEstablished
+                            ? () => _handleSpeakerTap(context, state)
+                            : null,
                       ),
                     ],
                   ),
-                  child: Icon(
-                    Icons.call_end,
-                    color: colorScheme.onError,
-                    size: 32,
-                  ),
-                ),
-              ),
 
-              const SizedBox(height: 32),
-            ],
-          ),
-        ),
-      ],
-    ),
+                  const SizedBox(height: 24),
 
-    // Incoming Call Banner Overlay (2nd call)
-    if (state.incomingCall != null)
-      Positioned(
-        top: 20,
-        left: 16,
-        right: 16,
-        child: Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(16),
-          color: colorScheme.surfaceContainerHighest,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    _Avatar(uri: state.incomingCall!.peerUri, size: 44),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Incoming Call...', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary, fontSize: 12)),
-                          Text(_formatUri(state.incomingCall!.peerUri), style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+                  // Share log button (visible only when established or held)
+                  if (isEstablished || isHeld)
+                    TextButton.icon(
+                      onPressed: _isSharing ? null : _shareLog,
+                      icon: _isSharing
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.share, size: 18),
+                      label: Text(_isSharing ? 'Sharing…' : 'Share Call Log'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: colorScheme.primary,
+                        textStyle: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Hang up
+                  GestureDetector(
+                    onTap: () => bloc.add(const HangupCallSip()),
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: colorScheme.error,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: colorScheme.error.withValues(alpha: 0.3),
+                            blurRadius: 16,
+                            spreadRadius: 2,
+                          ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => bloc.add(RejectCallSip(state.incomingCall!.callId)),
-                      icon: Icon(Icons.call_end, color: colorScheme.error, size: 18),
-                      label: Text('Decline', style: TextStyle(color: colorScheme.error)),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => bloc.add(AnswerCallSip(state.incomingCall!.callId)),
-                      icon: const Icon(Icons.call, size: 18),
-                      label: const Text('Answer & Hold'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade600,
-                        foregroundColor: Colors.white,
+                      child: Icon(
+                        Icons.call_end,
+                        color: colorScheme.onError,
+                        size: 32,
                       ),
                     ),
+                  ),
+
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        // Incoming Call Banner Overlay (2nd call)
+        if (state.incomingCall != null)
+          Positioned(
+            top: 20,
+            left: 16,
+            right: 16,
+            child: Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(16),
+              color: colorScheme.surfaceContainerHighest,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        _Avatar(uri: state.incomingCall!.peerUri, size: 44),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Incoming Call...',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.primary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Text(
+                                _formatUri(state.incomingCall!.peerUri),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => bloc.add(
+                            RejectCallSip(state.incomingCall!.callId),
+                          ),
+                          icon: Icon(
+                            Icons.call_end,
+                            color: colorScheme.error,
+                            size: 18,
+                          ),
+                          label: Text(
+                            'Decline',
+                            style: TextStyle(color: colorScheme.error),
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () => bloc.add(
+                            AnswerCallSip(state.incomingCall!.callId),
+                          ),
+                          icon: const Icon(Icons.call, size: 18),
+                          label: const Text('Answer & Hold'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green.shade600,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
 
   List<Widget> _buildStatsSection(ColorScheme colorScheme) {
     return [
