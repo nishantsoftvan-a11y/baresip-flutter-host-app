@@ -103,7 +103,9 @@ class SipState {
       networkConnected: networkConnected ?? this.networkConnected,
       lastError: lastError != null ? lastError() : this.lastError,
       isBusy: isBusy ?? this.isBusy,
-      callFailureReason: callFailureReason != null ? callFailureReason() : this.callFailureReason,
+      callFailureReason: callFailureReason != null
+          ? callFailureReason()
+          : this.callFailureReason,
       incomingCall: incomingCall != null ? incomingCall() : this.incomingCall,
       heldCalls: heldCalls ?? this.heldCalls,
       lastMtlsResult: lastMtlsResult != null
@@ -120,12 +122,15 @@ class SipState {
   }
 
   bool get isRegistered => regState == RegistrationState.registered;
-  bool get isCallAlive => (callState != null) || incomingCall != null || heldCalls.isNotEmpty;
+  bool get isCallAlive =>
+      (callState != null) || incomingCall != null || heldCalls.isNotEmpty;
   bool get isInCall => isCallAlive;
   bool get isCallActive => callState == CallState.established;
-  bool get hasIncoming => callState == CallState.incoming || incomingCall != null;
+  bool get hasIncoming =>
+      callState == CallState.incoming || incomingCall != null;
   bool get hasHeldCall => heldCalls.isNotEmpty;
-  bool get hasCallFailure => callFailureReason != null && callFailureReason!.isNotEmpty;
+  bool get hasCallFailure =>
+      callFailureReason != null && callFailureReason!.isNotEmpty;
 
   String get regLabel {
     switch (regState) {
@@ -363,20 +368,20 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     on<_OnAudioRouteChanged>(
       (event, emit) => emit(state.copyWith(currentRoute: event.event.route)),
     );
-    on<_OnNetworkStateChanged>(
-      (event, emit) {
-        final isConnected = event.event.connected;
-        if (!isConnected) {
-          emit(state.copyWith(
+    on<_OnNetworkStateChanged>((event, emit) {
+      final isConnected = event.event.connected;
+      if (!isConnected) {
+        emit(
+          state.copyWith(
             networkConnected: false,
             regState: RegistrationState.failed,
             regReason: 'Network Offline',
-          ));
-        } else {
-          emit(state.copyWith(networkConnected: true));
-        }
-      },
-    );
+          ),
+        );
+      } else {
+        emit(state.copyWith(networkConnected: true));
+      }
+    });
     on<_OnErrorOccurred>(_onErrorOccurred);
     on<_OnMtlsErrorOccurred>(
       (event, emit) => emit(
@@ -609,32 +614,39 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     if (!micStatus.isGranted) {
       final reqResult = await Permission.microphone.request();
       if (!reqResult.isGranted) {
-        const reason = 'Microphone permission is required to place calls. Please grant permission in Settings.';
-        emit(state.copyWith(
-          callState: () => CallState.closed,
-          callFailureReason: () => reason,
-          lastError: () => 'Microphone permission denied.',
-        ));
+        const reason =
+            'Microphone permission is required to place calls. Please grant permission in Settings.';
+        emit(
+          state.copyWith(
+            callState: () => CallState.closed,
+            callFailureReason: () => reason,
+            lastError: () => 'Microphone permission denied.',
+          ),
+        );
         _scheduleFailureDismissTimer();
         return; // Abort call attempt before sending SIP INVITE
       }
     }
 
     final uri = _buildSipUri(event.peerUri);
-    emit(state.copyWith(
-      callState: () => CallState.outgoing,
-      callPeerUri: uri,
-      callFailureReason: () => null,
-      isBusy: true,
-    ));
+    emit(
+      state.copyWith(
+        callState: () => CallState.outgoing,
+        callPeerUri: uri,
+        callFailureReason: () => null,
+        isBusy: true,
+      ),
+    );
     try {
       await _client.startCall(uri);
     } catch (e) {
       final reason = _formatCallFailureReason(e.toString());
-      emit(state.copyWith(
-        callState: () => CallState.closed,
-        callFailureReason: () => reason,
-      ));
+      emit(
+        state.copyWith(
+          callState: () => CallState.closed,
+          callFailureReason: () => reason,
+        ),
+      );
       _scheduleFailureDismissTimer();
     } finally {
       emit(state.copyWith(isBusy: false));
@@ -646,7 +658,10 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     Emitter<SipState> emit,
   ) async {
     try {
-      final targetId = event.callId ?? state.incomingCall?.callId ?? (state.callState == CallState.incoming ? state.callId : null);
+      final targetId =
+          event.callId ??
+          state.incomingCall?.callId ??
+          (state.callState == CallState.incoming ? state.callId : null);
       if (state.isCallActive && state.callState == CallState.established) {
         // Current active call is moved to held list
         final currentCall = CallInfo(
@@ -655,16 +670,19 @@ class SipBloc extends Bloc<SipEvent, SipState> {
           state: CallState.held,
           isOnHold: true,
         );
-        final updatedHeld = List<CallInfo>.from(state.heldCalls)..add(currentCall);
+        final updatedHeld = List<CallInfo>.from(state.heldCalls)
+          ..add(currentCall);
         final incoming = state.incomingCall;
-        emit(state.copyWith(
-          heldCalls: updatedHeld,
-          callState: () => CallState.established,
-          callPeerUri: incoming?.peerUri ?? state.callPeerUri,
-          callId: incoming?.callId ?? state.callId,
-          incomingCall: () => null,
-          isOnHold: false,
-        ));
+        emit(
+          state.copyWith(
+            heldCalls: updatedHeld,
+            callState: () => CallState.established,
+            callPeerUri: incoming?.peerUri ?? state.callPeerUri,
+            callId: incoming?.callId ?? state.callId,
+            incomingCall: () => null,
+            isOnHold: false,
+          ),
+        );
       }
       await _client.answerCall(callId: targetId);
     } catch (e) {
@@ -677,8 +695,12 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     Emitter<SipState> emit,
   ) async {
     try {
-      final targetId = event.callId ?? state.incomingCall?.callId ?? (state.callState == CallState.incoming ? state.callId : null);
-      if (state.incomingCall != null && (targetId == null || targetId == state.incomingCall!.callId)) {
+      final targetId =
+          event.callId ??
+          state.incomingCall?.callId ??
+          (state.callState == CallState.incoming ? state.callId : null);
+      if (state.incomingCall != null &&
+          (targetId == null || targetId == state.incomingCall!.callId)) {
         emit(state.copyWith(incomingCall: () => null));
       }
       await _client.rejectCall(callId: targetId);
@@ -711,10 +733,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     } catch (_) {}
   }
 
-  Future<void> _onSwapCalls(
-    SwapCallsSip event,
-    Emitter<SipState> emit,
-  ) async {
+  Future<void> _onSwapCalls(SwapCallsSip event, Emitter<SipState> emit) async {
     if (state.heldCalls.isEmpty) return;
     final currentCall = CallInfo(
       callId: state.callId,
@@ -723,18 +742,22 @@ class SipBloc extends Bloc<SipEvent, SipState> {
       isOnHold: true,
     );
     final targetCall = state.heldCalls.last;
-    final newHeldList = List<CallInfo>.from(state.heldCalls.sublist(0, state.heldCalls.length - 1))..add(currentCall);
+    final newHeldList = List<CallInfo>.from(
+      state.heldCalls.sublist(0, state.heldCalls.length - 1),
+    )..add(currentCall);
 
     try {
       await _client.hold(true, callId: state.callId);
       await _client.hold(false, callId: targetCall.callId);
-      emit(state.copyWith(
-        callState: () => CallState.established,
-        callPeerUri: targetCall.peerUri,
-        callId: targetCall.callId,
-        isOnHold: false,
-        heldCalls: newHeldList,
-      ));
+      emit(
+        state.copyWith(
+          callState: () => CallState.established,
+          callPeerUri: targetCall.peerUri,
+          callId: targetCall.callId,
+          isOnHold: false,
+          heldCalls: newHeldList,
+        ),
+      );
     } catch (e) {
       emit(state.copyWith(lastError: () => e.toString()));
     }
@@ -877,7 +900,9 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     final e = event.event;
 
     if (e.state == CallState.incoming) {
-      if (state.isCallActive || state.callState == CallState.established || state.callState == CallState.held) {
+      if (state.isCallActive ||
+          state.callState == CallState.established ||
+          state.callState == CallState.held) {
         // Second incoming call!
         emit(
           state.copyWith(
@@ -893,14 +918,37 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     }
 
     if (e.state == CallState.closed) {
-      if (state.incomingCall != null && (e.callId == state.incomingCall!.callId || (e.peerUri.isNotEmpty && state.incomingCall!.peerUri == e.peerUri))) {
-        // Second incoming call was rejected/cancelled
+      if (state.incomingCall != null &&
+          (e.callId == state.incomingCall!.callId ||
+              (e.peerUri.isNotEmpty &&
+                  state.incomingCall!.peerUri == e.peerUri))) {
+        // Second incoming call was rejected/cancelled (incomingCall still present)
+        emit(state.copyWith(incomingCall: () => null));
+        return;
+      }
+
+      // Guard: if the primary call is still active/held and the closed callId does NOT match
+      // the primary call, this CLOSED event belongs to a secondary call (e.g. a rejected
+      // second incoming whose incomingCall slot was already cleared by _onRejectCall before
+      // the native CLOSED event arrived). Keep the call screen intact.
+      final isPrimaryCallActive =
+          state.callState == CallState.established ||
+          state.callState == CallState.held ||
+          state.callState == CallState.outgoing ||
+          state.callState == CallState.ringing;
+      final closedIsNotPrimary = e.callId == 0
+          ? false // callId=0 means platform didn't carry a real id; must rely on other signals
+          : e.callId != state.callId;
+      if (isPrimaryCallActive && closedIsNotPrimary) {
+        // A secondary call closed (e.g. rejected second incoming) — primary still alive.
         emit(state.copyWith(incomingCall: () => null));
         return;
       }
 
       // Check if held call can be resumed
-      final remainingHeld = state.heldCalls.where((c) => c.callId != e.callId).toList();
+      final remainingHeld = state.heldCalls
+          .where((c) => c.callId != e.callId)
+          .toList();
       if (remainingHeld.isNotEmpty) {
         final nextCall = remainingHeld.last;
         final newHeldList = remainingHeld.sublist(0, remainingHeld.length - 1);
@@ -933,8 +981,10 @@ class SipBloc extends Bloc<SipEvent, SipState> {
       emit(
         state.copyWith(
           callState: () => e.state,
-          callPeerUri: e.peerUri,
-          callId: e.callId,
+          // Preserve existing peerUri/callId if the event carries empty values
+          // (e.g. iOS emits ESTABLISHED with "" when resuming after secondary call closed)
+          callPeerUri: e.peerUri.isNotEmpty ? e.peerUri : state.callPeerUri,
+          callId: e.callId != 0 ? e.callId : state.callId,
           callFailureReason: () => null,
         ),
       );
@@ -978,64 +1028,116 @@ class SipBloc extends Bloc<SipEvent, SipState> {
       final code = int.parse(codeMatch.group(1)!);
       switch (code) {
         // 3xx Redirection
-        case 300: return 'Multiple Choices (300)';
-        case 301: return 'Moved Permanently (301)';
-        case 302: return 'Moved Temporarily (302)';
-        case 305: return 'Use Proxy (305)';
-        case 380: return 'Alternative Service (380)';
+        case 300:
+          return 'Multiple Choices (300)';
+        case 301:
+          return 'Moved Permanently (301)';
+        case 302:
+          return 'Moved Temporarily (302)';
+        case 305:
+          return 'Use Proxy (305)';
+        case 380:
+          return 'Alternative Service (380)';
 
         // 4xx Client Failures
-        case 400: return 'Bad Request (400)';
-        case 401: return 'Unauthorized (401)';
-        case 402: return 'Payment Required (402)';
-        case 403: return 'Forbidden (403)';
-        case 404: return 'User Not Found (404)';
-        case 405: return 'Method Not Allowed (405)';
-        case 406: return 'Not Acceptable (406)';
-        case 407: return 'Proxy Auth Required (407)';
-        case 408: return 'Request Timeout (408)';
-        case 409: return 'Conflict (409)';
-        case 410: return 'Gone / User Unreachable (410)';
-        case 413: return 'Request Too Large (413)';
-        case 414: return 'URI Too Long (414)';
-        case 415: return 'Unsupported Media (415)';
-        case 416: return 'Unsupported Scheme (416)';
-        case 420: return 'Bad Extension (420)';
-        case 421: return 'Extension Required (421)';
-        case 422: return 'Session Interval Too Small (422)';
-        case 423: return 'Interval Too Brief (423)';
-        case 430: return 'Flow Failed (430)';
-        case 433: return 'Anonymity Disallowed (433)';
-        case 480: return 'User Unavailable (480)';
-        case 481: return 'Transaction Does Not Exist (481)';
-        case 482: return 'Loop Detected (482)';
-        case 483: return 'Too Many Hops (483)';
-        case 484: return 'Address Incomplete (484)';
-        case 485: return 'Ambiguous Address (485)';
-        case 486: return 'User Busy (486)';
-        case 487: return 'Call Cancelled (487)';
-        case 488: return 'Not Acceptable Here (488)';
-        case 491: return 'Request Pending (491)';
-        case 493: return 'Undecipherable (493)';
+        case 400:
+          return 'Bad Request (400)';
+        case 401:
+          return 'Unauthorized (401)';
+        case 402:
+          return 'Payment Required (402)';
+        case 403:
+          return 'Forbidden (403)';
+        case 404:
+          return 'User Not Found (404)';
+        case 405:
+          return 'Method Not Allowed (405)';
+        case 406:
+          return 'Not Acceptable (406)';
+        case 407:
+          return 'Proxy Auth Required (407)';
+        case 408:
+          return 'Request Timeout (408)';
+        case 409:
+          return 'Conflict (409)';
+        case 410:
+          return 'Gone / User Unreachable (410)';
+        case 413:
+          return 'Request Too Large (413)';
+        case 414:
+          return 'URI Too Long (414)';
+        case 415:
+          return 'Unsupported Media (415)';
+        case 416:
+          return 'Unsupported Scheme (416)';
+        case 420:
+          return 'Bad Extension (420)';
+        case 421:
+          return 'Extension Required (421)';
+        case 422:
+          return 'Session Interval Too Small (422)';
+        case 423:
+          return 'Interval Too Brief (423)';
+        case 430:
+          return 'Flow Failed (430)';
+        case 433:
+          return 'Anonymity Disallowed (433)';
+        case 480:
+          return 'User Unavailable (480)';
+        case 481:
+          return 'Transaction Does Not Exist (481)';
+        case 482:
+          return 'Loop Detected (482)';
+        case 483:
+          return 'Too Many Hops (483)';
+        case 484:
+          return 'Address Incomplete (484)';
+        case 485:
+          return 'Ambiguous Address (485)';
+        case 486:
+          return 'User Busy (486)';
+        case 487:
+          return 'Call Cancelled (487)';
+        case 488:
+          return 'Not Acceptable Here (488)';
+        case 491:
+          return 'Request Pending (491)';
+        case 493:
+          return 'Undecipherable (493)';
 
         // 5xx Server Failures
-        case 500: return 'Server Internal Error (500)';
-        case 501: return 'Not Implemented (501)';
-        case 502: return 'Bad Gateway (502)';
-        case 503: return 'Service Unavailable (503)';
-        case 504: return 'Server Timeout (504)';
-        case 505: return 'Version Not Supported (505)';
-        case 513: return 'Message Too Large (513)';
-        case 580: return 'Precondition Failure (580)';
+        case 500:
+          return 'Server Internal Error (500)';
+        case 501:
+          return 'Not Implemented (501)';
+        case 502:
+          return 'Bad Gateway (502)';
+        case 503:
+          return 'Service Unavailable (503)';
+        case 504:
+          return 'Server Timeout (504)';
+        case 505:
+          return 'Version Not Supported (505)';
+        case 513:
+          return 'Message Too Large (513)';
+        case 580:
+          return 'Precondition Failure (580)';
 
         // 6xx Global Failures
-        case 600: return 'Busy Everywhere (600)';
-        case 603: return 'Call Declined (603)';
-        case 604: return 'User Does Not Exist (604)';
-        case 606: return 'Not Acceptable (606)';
-        case 607: return 'Unwanted Call (607)';
-        case 608: return 'Call Rejected (608)';
-        default: return 'Call Error ($code)';
+        case 600:
+          return 'Busy Everywhere (600)';
+        case 603:
+          return 'Call Declined (603)';
+        case 604:
+          return 'User Does Not Exist (604)';
+        case 606:
+          return 'Not Acceptable (606)';
+        case 607:
+          return 'Unwanted Call (607)';
+        case 608:
+          return 'Call Rejected (608)';
+        default:
+          return 'Call Error ($code)';
       }
     }
 
@@ -1044,8 +1146,10 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     if (lower.contains('timeout')) return 'Request Timeout (408)';
     if (lower.contains('unavailable')) return 'User Unavailable (480)';
     if (lower.contains('unauthorized')) return 'Authentication Failed';
-    if (lower.contains('not registered') || lower.contains('offline')) return 'User / SDK Not Registered';
-    if (lower.contains('declined') || lower.contains('rejected')) return 'Call Declined';
+    if (lower.contains('not registered') || lower.contains('offline'))
+      return 'User / SDK Not Registered';
+    if (lower.contains('declined') || lower.contains('rejected'))
+      return 'Call Declined';
     if (lower.contains('mic') || lower.contains('permission')) return raw;
 
     if (raw != 'Call closed' && raw != 'Normal call clearing') {
@@ -1065,7 +1169,10 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     });
   }
 
-  void _onDismissCallFailure(_OnDismissCallFailureSip event, Emitter<SipState> emit) {
+  void _onDismissCallFailure(
+    _OnDismissCallFailureSip event,
+    Emitter<SipState> emit,
+  ) {
     if (state.callState == CallState.closed) {
       _stopTimer();
       emit(
