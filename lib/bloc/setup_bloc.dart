@@ -137,6 +137,8 @@ class SetupSubmit extends SetupEvent {
   final String turnPassword;
   final bool iceAggressiveNomination;
   final String iceKeepAliveInterval;
+  final String regint;
+  final String rwait;
 
   const SetupSubmit({
     required this.username,
@@ -165,6 +167,8 @@ class SetupSubmit extends SetupEvent {
     required this.turnPassword,
     required this.iceAggressiveNomination,
     required this.iceKeepAliveInterval,
+    this.regint = '60',
+    this.rwait = '90',
   });
 }
 
@@ -207,6 +211,8 @@ class SetupState {
   final bool iceEnabled;
   final bool iceAggressiveNomination;
   final int iceKeepAliveInterval;
+  final int regint;
+  final int rwait;
 
   // Text values to sync to controllers on demand (when syncToken changes)
   final String? syncUsername;
@@ -224,6 +230,8 @@ class SetupState {
   final String? syncTurnUsername;
   final String? syncTurnPassword;
   final String? syncIceKeepAliveInterval;
+  final String? syncRegint;
+  final String? syncRwait;
   // PEM fields — only set when loading from a profile
   final String? syncClientCertPem;
   final String? syncPrivateKeyPem;
@@ -269,6 +277,8 @@ class SetupState {
     this.iceEnabled = true,
     this.iceAggressiveNomination = false,
     this.iceKeepAliveInterval = 15,
+    this.regint = 60,
+    this.rwait = 90,
     this.syncUsername,
     this.syncPassword,
     this.syncDisplayName,
@@ -284,6 +294,8 @@ class SetupState {
     this.syncTurnUsername,
     this.syncTurnPassword,
     this.syncIceKeepAliveInterval,
+    this.syncRegint,
+    this.syncRwait,
     this.syncClientCertPem,
     this.syncPrivateKeyPem,
     this.syncCaCertPem,
@@ -322,6 +334,8 @@ class SetupState {
     bool? iceEnabled,
     bool? iceAggressiveNomination,
     int? iceKeepAliveInterval,
+    int? regint,
+    int? rwait,
     String? Function()? syncUsername,
     String? Function()? syncPassword,
     String? Function()? syncDisplayName,
@@ -337,6 +351,8 @@ class SetupState {
     String? Function()? syncTurnUsername,
     String? Function()? syncTurnPassword,
     String? Function()? syncIceKeepAliveInterval,
+    String? Function()? syncRegint,
+    String? Function()? syncRwait,
     String? Function()? syncClientCertPem,
     String? Function()? syncPrivateKeyPem,
     String? Function()? syncCaCertPem,
@@ -377,6 +393,8 @@ class SetupState {
       iceAggressiveNomination:
           iceAggressiveNomination ?? this.iceAggressiveNomination,
       iceKeepAliveInterval: iceKeepAliveInterval ?? this.iceKeepAliveInterval,
+      regint: regint ?? this.regint,
+      rwait: rwait ?? this.rwait,
       syncUsername: syncUsername != null ? syncUsername() : this.syncUsername,
       syncPassword: syncPassword != null ? syncPassword() : this.syncPassword,
       syncDisplayName: syncDisplayName != null
@@ -406,6 +424,8 @@ class SetupState {
       syncIceKeepAliveInterval: syncIceKeepAliveInterval != null
           ? syncIceKeepAliveInterval()
           : this.syncIceKeepAliveInterval,
+      syncRegint: syncRegint != null ? syncRegint() : this.syncRegint,
+      syncRwait: syncRwait != null ? syncRwait() : this.syncRwait,
       syncClientCertPem: syncClientCertPem != null
           ? syncClientCertPem()
           : this.syncClientCertPem,
@@ -514,6 +534,10 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
           syncTurnPassword: () => nat != null ? nat.turnPassword : '',
           syncIceKeepAliveInterval: () =>
               nat != null ? nat.iceKeepAliveInterval.toString() : '15',
+          regint: config.regint,
+          rwait: config.rwait,
+          syncRegint: () => config.regint.toString(),
+          syncRwait: () => config.rwait.toString(),
         ),
       );
     });
@@ -777,6 +801,8 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
           ? [AudioCodec.opus]
           : enabledPriorityCodecs,
       natConfig: natConfig,
+      regint: int.tryParse(event.regint.trim()) ?? 60,
+      rwait: int.tryParse(event.rwait.trim()) ?? 90,
     );
 
     if (state.useMtls) {

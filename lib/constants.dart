@@ -80,6 +80,8 @@ class AppConstants {
   static const String labelHost = 'SIP Server';
   static const String labelDisplayName = 'Display Name';
   static const String labelPort = 'Custom Port';
+  static const String labelRegint = 'Registration Interval (regint / reginit)';
+  static const String labelRwait = 'Re-registration Wait (rwait %)';
   static const String labelStunServer = 'STUN Server URI';
   static const String labelAuthUsername = 'Auth Username';
   static const String labelMtlsAlias = 'Certificate Alias';
@@ -105,6 +107,8 @@ class AppConstants {
   static const String defaultDisplayName = '';
   static const String defaultHost = '';
   static const String defaultPort = '5061';
+  static const String defaultRegint = '60';
+  static const String defaultRwait = '90';
   static const String defaultAuthUsername = '';
   static const String defaultMtlsAlias = '';
   static const String defaultEnrollmentUrl = '';

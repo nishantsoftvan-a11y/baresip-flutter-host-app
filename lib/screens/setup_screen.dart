@@ -81,6 +81,8 @@ class _SetupFormState extends State<_SetupForm> {
   final _turnUsernameCtrl = TextEditingController();
   final _turnPasswordCtrl = TextEditingController();
   final _iceKeepAliveIntervalCtrl = TextEditingController(text: '15');
+  final _regintCtrl = TextEditingController(text: AppConstants.defaultRegint);
+  final _rwaitCtrl = TextEditingController(text: AppConstants.defaultRwait);
 
   // Track last synced token to avoid redundant controller updates
   int _lastSyncToken = 0;
@@ -112,6 +114,8 @@ class _SetupFormState extends State<_SetupForm> {
       _turnUsernameCtrl,
       _turnPasswordCtrl,
       _iceKeepAliveIntervalCtrl,
+      _regintCtrl,
+      _rwaitCtrl,
     ]) {
       c.dispose();
     }
@@ -381,6 +385,12 @@ class _SetupFormState extends State<_SetupForm> {
       if (state.syncIceKeepAliveInterval != null) {
         _iceKeepAliveIntervalCtrl.text = state.syncIceKeepAliveInterval!;
       }
+      if (state.syncRegint != null) {
+        _regintCtrl.text = state.syncRegint!;
+      }
+      if (state.syncRwait != null) {
+        _rwaitCtrl.text = state.syncRwait!;
+      }
       if (state.syncClientCertPem != null) {
         _clientCertCtrl.text = state.syncClientCertPem!;
       }
@@ -467,6 +477,8 @@ class _SetupFormState extends State<_SetupForm> {
         turnPassword: _turnPasswordCtrl.text,
         iceAggressiveNomination: setupState.iceAggressiveNomination,
         iceKeepAliveInterval: _iceKeepAliveIntervalCtrl.text,
+        regint: _regintCtrl.text,
+        rwait: _rwaitCtrl.text,
       ),
     );
 
@@ -1118,6 +1130,22 @@ class _SetupFormState extends State<_SetupForm> {
               controller: _portCtrl,
               label: AppConstants.labelPort,
               icon: Icons.settings_ethernet,
+              keyboardType: TextInputType.number,
+              enabled: !sipState.isRegistered,
+            ),
+            const SizedBox(height: 16),
+            TextLabelField(
+              controller: _regintCtrl,
+              label: AppConstants.labelRegint,
+              icon: Icons.timer,
+              keyboardType: TextInputType.number,
+              enabled: !sipState.isRegistered,
+            ),
+            const SizedBox(height: 16),
+            TextLabelField(
+              controller: _rwaitCtrl,
+              label: AppConstants.labelRwait,
+              icon: Icons.hourglass_bottom,
               keyboardType: TextInputType.number,
               enabled: !sipState.isRegistered,
             ),
