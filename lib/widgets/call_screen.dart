@@ -225,7 +225,33 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
       children: [
         Column(
           children: [
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
+
+            // Top Bar: Minimize button + Stats toggle
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 32),
+                    tooltip: 'Minimize call',
+                    onPressed: () => bloc.add(const MinimizeCallSip()),
+                  ),
+                  if (isEstablished)
+                    IconButton(
+                      icon: Icon(
+                        _showStats ? Icons.analytics : Icons.analytics_outlined,
+                        color: _showStats ? colorScheme.primary : null,
+                      ),
+                      tooltip: _showStats ? 'Hide Call Stats' : 'Show Call Stats',
+                      onPressed: () => setState(() => _showStats = !_showStats),
+                    )
+                  else
+                    const SizedBox(width: 48),
+                ],
+              ),
+            ),
 
             // 2nd Incoming Call Waiting Banner
             if (state.incomingCall != null)

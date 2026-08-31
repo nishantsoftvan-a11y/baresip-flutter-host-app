@@ -37,6 +37,7 @@ class SipState {
   // Multi-call support
   final CallInfo? incomingCall;
   final List<CallInfo> heldCalls;
+  final bool isCallMinimized;
 
   // mTLS
   final MtlsResult? lastMtlsResult;
@@ -61,6 +62,7 @@ class SipState {
     this.callFailureReason,
     this.incomingCall,
     this.heldCalls = const [],
+    this.isCallMinimized = false,
     this.lastMtlsResult,
     this.mtlsCertInfo,
     this.lastMtlsError,
@@ -84,6 +86,7 @@ class SipState {
     String? Function()? callFailureReason,
     CallInfo? Function()? incomingCall,
     List<CallInfo>? heldCalls,
+    bool? isCallMinimized,
     MtlsResult? Function()? lastMtlsResult,
     CertificateInfo? Function()? mtlsCertInfo,
     MtlsErrorEvent? Function()? lastMtlsError,
@@ -108,6 +111,7 @@ class SipState {
           : this.callFailureReason,
       incomingCall: incomingCall != null ? incomingCall() : this.incomingCall,
       heldCalls: heldCalls ?? this.heldCalls,
+      isCallMinimized: isCallMinimized ?? this.isCallMinimized,
       lastMtlsResult: lastMtlsResult != null
           ? lastMtlsResult()
           : this.lastMtlsResult,
@@ -285,6 +289,18 @@ class RequestPermissionsSip extends SipEvent {
   const RequestPermissionsSip();
 }
 
+class CheckActiveCallSip extends SipEvent {
+  const CheckActiveCallSip();
+}
+
+class MinimizeCallSip extends SipEvent {
+  const MinimizeCallSip();
+}
+
+class RestoreCallSip extends SipEvent {
+  const RestoreCallSip();
+}
+
 // Stream updates
 class _OnRegistrationStateChanged extends SipEvent {
   final RegistrationStateEvent event;
@@ -359,6 +375,13 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     on<LoadMtlsCertInfoSip>(_onLoadMtlsCertInfo);
     on<ClearErrorSip>(_onClearError);
     on<RequestPermissionsSip>(_onRequestPermissions);
+    on<CheckActiveCallSip>(_onCheckActiveCall);
+    on<MinimizeCallSip>(
+      (event, emit) => emit(state.copyWith(isCallMinimized: true)),
+    );
+    on<RestoreCallSip>(
+      (event, emit) => emit(state.copyWith(isCallMinimized: false)),
+    );
 
     // Internal updates
     on<_OnRegistrationStateChanged>(_onRegistrationStateChanged);
@@ -417,6 +440,9 @@ class SipBloc extends Bloc<SipEvent, SipState> {
       _client.mtlsErrorStream.listen((e) => add(_OnMtlsErrorOccurred(e))),
       _client.mtlsCertExpiringStream.listen((e) => add(_OnMtlsCertExpiring(e))),
     ]);
+
+    // Check for ongoing active call on startup
+    add(const CheckActiveCallSip());
   }
 
   Future<void> _onRequestPermissions(
@@ -460,6 +486,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
       await _client.initialize(event.config);
       emit(state.copyWith(config: () => event.config));
       await _client.login();
+      add(const CheckActiveCallSip());
     } catch (e) {
       emit(state.copyWith(lastError: () => e.toString()));
     } finally {
@@ -832,6 +859,30 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     } catch (_) {}
   }
 
+  Future<void> _onCheckActiveCall(
+    CheckActiveCallSip event,
+    Emitter<SipState> emit,
+  ) async {
+    try {
+      final active = await _client.getActiveCall();
+      if (active != null && active.state != CallState.closed) {
+        emit(
+          state.copyWith(
+            callState: () => active.state,
+            callPeerUri: active.peerUri,
+            callId: active.callId,
+            isOnHold: active.isOnHold,
+            isCallMinimized: false,
+            callFailureReason: () => null,
+          ),
+        );
+        if (active.state == CallState.established) {
+          _startTimer();
+        }
+      }
+    } catch (_) {}
+  }
+
   void _onClearError(ClearErrorSip event, Emitter<SipState> emit) {
     emit(state.copyWith(lastError: () => null));
   }
@@ -882,6 +933,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
         state.copyWith(
           callState: () => CallState.closed,
           callFailureReason: () => reason,
+          isCallMinimized: false,
           isMuted: false,
           isOnHold: false,
         ),

@@ -25,8 +25,8 @@ class HomeScreen extends StatelessWidget {
 
     return BlocBuilder<SipBloc, SipState>(
       builder: (context, sipState) {
-        // Show active call overlay
-        if (sipState.isInCall) {
+        // Show active call overlay when in call and not minimized
+        if (sipState.isInCall && !sipState.isCallMinimized) {
           return const CallScreen();
         }
 
@@ -102,6 +102,9 @@ class HomeScreen extends StatelessWidget {
           ),
           body: Column(
             children: [
+              // Active ongoing call banner when minimized
+              if (sipState.isInCall) _OngoingCallBanner(state: sipState),
+
               // Error banner
               if (sipState.lastError != null)
                 _ErrorBanner(
@@ -468,9 +471,7 @@ class _DialInputState extends State<_DialInput> {
         _controller.text != widget.dialInput) {
       _controller.value = TextEditingValue(
         text: widget.dialInput,
-        selection: TextSelection.collapsed(
-          offset: widget.dialInput.length,
-        ),
+        selection: TextSelection.collapsed(offset: widget.dialInput.length),
       );
     }
   }
@@ -531,6 +532,151 @@ class _DialInputState extends State<_DialInput> {
               ),
               onPressed: widget.onBackspace,
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Ongoing Active Call Banner (When Minimized) ──────────────────────────────
+
+class _OngoingCallBanner extends StatelessWidget {
+  final SipState state;
+  const _OngoingCallBanner({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final bloc = context.read<SipBloc>();
+    final isEstablished = state.callState == CallState.established;
+    final isHeld = state.callState == CallState.held;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.primary.withValues(alpha: 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Pulse green indicator
+          GestureDetector(
+            onTap: () => bloc.add(const RestoreCallSip()),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isHeld ? Colors.orange.shade700 : Colors.green.shade600,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.phone_in_talk,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Caller info & duration (tap to restore call screen)
+          Expanded(
+            child: GestureDetector(
+              onTap: () => bloc.add(const RestoreCallSip()),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: isHeld ? Colors.orange : Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isHeld
+                            ? 'Call on hold'
+                            : (isEstablished ? 'Active Call' : state.callLabel),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onPrimaryContainer.withValues(
+                            alpha: 0.8,
+                          ),
+                        ),
+                      ),
+                      if (isEstablished) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '• ${state.callLabel}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    state.callPeerUri.isNotEmpty
+                        ? state.callPeerUri
+                        : 'VoIP Call',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onPrimaryContainer,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Quick actions: Mute toggle, Maximize button, Hang up
+          IconButton(
+            icon: Icon(
+              state.isMuted ? Icons.mic_off : Icons.mic,
+              color: state.isMuted
+                  ? colorScheme.error
+                  : colorScheme.onPrimaryContainer,
+              size: 20,
+            ),
+            tooltip: state.isMuted ? 'Unmute' : 'Mute',
+            onPressed: () => bloc.add(const ToggleMuteSip()),
+          ),
+          IconButton(
+            icon: const Icon(Icons.open_in_full, size: 18),
+            tooltip: 'Open call screen',
+            onPressed: () => bloc.add(const RestoreCallSip()),
+          ),
+          IconButton(
+            icon: Container(
+              padding: const EdgeInsets.all(5),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.call_end, color: Colors.white, size: 16),
+            ),
+            tooltip: 'End call',
+            onPressed: () => bloc.add(const HangupCallSip()),
+          ),
         ],
       ),
     );
