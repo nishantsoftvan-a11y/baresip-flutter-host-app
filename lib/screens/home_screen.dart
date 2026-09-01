@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:sipsdk_flutter/sipsdk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,11 +14,55 @@ import '../widgets/reg_status_chip.dart';
 import 'sdk_crash_test_screen.dart';
 import 'setup_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _profileTapCount = 0;
+  bool _showTestingAction = false;
+  Timer? _profileTapDebounceTimer;
+
+  @override
+  void dispose() {
+    _profileTapDebounceTimer?.cancel();
+    super.dispose();
+  }
 
   void _showProfile(BuildContext context) {
     showDialog(context: context, builder: (_) => const ProfileDialog());
+  }
+
+  void _handleProfileTap() {
+    _profileTapDebounceTimer?.cancel();
+    _profileTapCount++;
+
+    if (_profileTapCount >= 10) {
+      _profileTapCount = 0;
+      if (!_showTestingAction) {
+        setState(() {
+          _showTestingAction = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🧪 Developer Testing Mode Enabled!'),
+            backgroundColor: Colors.indigo,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      // If user does not tap again within 350ms, treat as regular single tap
+      _profileTapDebounceTimer = Timer(const Duration(milliseconds: 350), () {
+        _profileTapCount = 0;
+        if (mounted) {
+          _showProfile(context);
+        }
+      });
+    }
   }
 
   @override
@@ -53,19 +99,20 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
             actions: [
-              // SDK Crash & Stability Test button
-              // IconButton(
-              //   icon: const Icon(Icons.shield_outlined, color: Colors.amber),
-              //   tooltip: 'SDK Crash & Stability Test',
-              //   onPressed: () {
-              //     Navigator.push(
-              //       context,
-              //       MaterialPageRoute(
-              //         builder: (_) => const SdkCrashTestScreen(),
-              //       ),
-              //     );
-              //   },
-              // ),
+              // SDK Crash & Stability Test button (Unlocked after 10 taps on profile)
+              if (_showTestingAction)
+                IconButton(
+                  icon: const Icon(Icons.shield_outlined, color: Colors.amber),
+                  tooltip: 'SDK Crash & Stability Test',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SdkCrashTestScreen(),
+                      ),
+                    );
+                  },
+                ),
 
               // Network indicator
               if (!sipState.networkConnected)
@@ -88,11 +135,11 @@ class HomeScreen extends StatelessWidget {
                   child: RegStatusChip(state: sipState.regState),
                 ),
 
-              // Profile avatar
+              // Profile avatar (10 taps unlocks testing icon)
               Padding(
                 padding: const EdgeInsets.only(right: 16, left: 8),
                 child: GestureDetector(
-                  onTap: () => _showProfile(context),
+                  onTap: _handleProfileTap,
                   child: CircleAvatar(
                     radius: 18,
                     backgroundColor: colorScheme.primaryContainer,
