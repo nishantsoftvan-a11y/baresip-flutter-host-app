@@ -699,7 +699,7 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
         id: 'chaos_2_native_jni_error',
         title: '5.2 Native JNI Error Dispatch & Clearance',
         category: TestCategory.invalidSequence,
-        targetLayer: 'Native C / JNI (baresip.c)',
+        targetLayer: 'Native C / JNI (sip.c)',
         triggerAction: 'Simulate native JNI memory error and pending exception',
         expectedResult: 'Native exception cleared safely via ExceptionClear()',
         description:
@@ -709,7 +709,7 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
         crashGenerationLogic:
             'Native JNI callback exceptions leaving pending Java exceptions on native threads.',
         resolutionLogic:
-            'Added ExceptionCheck() and ExceptionClear() after every JNI CallVoidMethod call in baresip.c.',
+            'Added ExceptionCheck() and ExceptionClear() after every JNI CallVoidMethod call in sip.c.',
         action: () async {
           final client = SipClient.instance;
           final res = await client.simulateFault('simulated_jni_error');

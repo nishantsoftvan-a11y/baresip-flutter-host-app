@@ -421,11 +421,21 @@ class SipBloc extends Bloc<SipEvent, SipState> {
       ),
     );
     on<_TickDurationSip>(
-      (event, emit) => emit(
-        state.copyWith(
-          callDuration: state.callDuration + const Duration(seconds: 1),
-        ),
-      ),
+      (event, emit) {
+        if (_callStartTime != null) {
+          emit(
+            state.copyWith(
+              callDuration: DateTime.now().difference(_callStartTime!),
+            ),
+          );
+        } else {
+          emit(
+            state.copyWith(
+              callDuration: state.callDuration + const Duration(seconds: 1),
+            ),
+          );
+        }
+      },
     );
 
     // Subscribe to client event streams
@@ -859,6 +869,8 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     } catch (_) {}
   }
 
+  DateTime? _callStartTime;
+
   Future<void> _onCheckActiveCall(
     CheckActiveCallSip event,
     Emitter<SipState> emit,
@@ -866,6 +878,10 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     try {
       final active = await _client.getActiveCall();
       if (active != null && active.state != CallState.closed) {
+        final isEstablished = active.state == CallState.established;
+        if (isEstablished && _callStartTime == null) {
+          _callStartTime = active.connectedDateTime ?? DateTime.now();
+        }
         emit(
           state.copyWith(
             callState: () => active.state,
@@ -876,7 +892,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
             callFailureReason: () => null,
           ),
         );
-        if (active.state == CallState.established) {
+        if (isEstablished) {
           _startTimer();
         }
       }
@@ -927,6 +943,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
 
     if (e.state == CallState.closed) {
       _stopTimer();
+      _callStartTime = null;
       final rawReason = e.peerUri.trim();
       final reason = _formatCallFailureReason(rawReason);
       emit(
@@ -936,20 +953,37 @@ class SipBloc extends Bloc<SipEvent, SipState> {
           isCallMinimized: false,
           isMuted: false,
           isOnHold: false,
+          callDuration: Duration.zero,
         ),
       );
       _scheduleFailureDismissTimer();
+    } else if (e.state == CallState.held) {
+      _failureDismissTimer?.cancel();
+      emit(
+        state.copyWith(
+          callState: () => CallState.held,
+          callPeerUri: e.peerUri.isNotEmpty ? e.peerUri : state.callPeerUri,
+          callId: e.callId != 0 ? e.callId : state.callId,
+          isOnHold: true,
+          callFailureReason: () => null,
+        ),
+      );
     } else {
       _failureDismissTimer?.cancel();
+      final isNowEstablished = e.state == CallState.established;
+      if (isNowEstablished && _callStartTime == null) {
+        _callStartTime = e.connectedDateTime ?? DateTime.now();
+      }
       emit(
         state.copyWith(
           callState: () => e.state,
           callPeerUri: e.peerUri.isNotEmpty ? e.peerUri : state.callPeerUri,
           callId: e.callId != 0 ? e.callId : state.callId,
+          isOnHold: isNowEstablished ? false : state.isOnHold,
           callFailureReason: () => null,
         ),
       );
-      if (e.state == CallState.established) {
+      if (isNowEstablished) {
         _startTimer();
       }
     }
