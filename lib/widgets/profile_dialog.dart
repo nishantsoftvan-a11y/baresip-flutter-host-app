@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../bloc/sip_bloc.dart';
+import '../screens/sdk_crash_test_screen.dart';
 import '../screens/setup_screen.dart';
 import 'custom_button.dart';
 
@@ -94,6 +95,27 @@ class ProfileDialog extends StatelessWidget {
               },
               child: const Text(
                 'Configure Account',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // SDK Crash & Stability Test Option
+            CustomButton(
+              type: CustomButtonType.outlined,
+              icon: Icons.shield_outlined,
+              foregroundColor: Colors.amber.shade800,
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const SdkCrashTestScreen(),
+                  ),
+                );
+              },
+              child: const Text(
+                'SDK Crash & Stability Test',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
             ),

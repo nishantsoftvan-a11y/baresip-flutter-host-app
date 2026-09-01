@@ -9,6 +9,7 @@ import '../widgets/custom_button.dart';
 import '../widgets/dialpad.dart';
 import '../widgets/profile_dialog.dart';
 import '../widgets/reg_status_chip.dart';
+import 'sdk_crash_test_screen.dart';
 import 'setup_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -52,6 +53,20 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
             actions: [
+              // SDK Crash & Stability Test button
+              // IconButton(
+              //   icon: const Icon(Icons.shield_outlined, color: Colors.amber),
+              //   tooltip: 'SDK Crash & Stability Test',
+              //   onPressed: () {
+              //     Navigator.push(
+              //       context,
+              //       MaterialPageRoute(
+              //         builder: (_) => const SdkCrashTestScreen(),
+              //       ),
+              //     );
+              //   },
+              // ),
+
               // Network indicator
               if (!sipState.networkConnected)
                 Padding(
