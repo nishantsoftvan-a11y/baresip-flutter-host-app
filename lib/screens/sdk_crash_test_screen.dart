@@ -875,6 +875,16 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
         ),
       );
 
+      final box = context.findRenderObject() as RenderBox?;
+      final origin = (box != null && box.hasSize)
+          ? (box.localToGlobal(Offset.zero) & box.size)
+          : Rect.fromLTWH(
+              0,
+              0,
+              MediaQuery.of(context).size.width,
+              MediaQuery.of(context).size.height / 2,
+            );
+
       final pdfFile = await PdfReportGenerator.generateReportPdf(
         tests: _tests,
         appHeartbeat: _appHeartbeat,
@@ -884,11 +894,13 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
       final passedCount = _tests
           .where((t) => t.status == TestStatus.passed)
           .length;
+
       await Share.shareXFiles(
         [XFile(pdfFile.path)],
         text:
             'LifeLine SIP SDK — Crash & Stability Test Report ($passedCount/${_tests.length} Passed)',
         subject: 'LifeLine SIP SDK Crash & Stability Test Report',
+        sharePositionOrigin: origin,
       );
     } catch (e) {
       if (mounted) {
