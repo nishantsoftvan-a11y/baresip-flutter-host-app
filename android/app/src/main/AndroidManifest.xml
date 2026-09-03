@@ -55,6 +55,13 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:exported="true" />
+
+        <service
+            android:name="com.sip.sip_sdk_flutter_example.service.HostVoipForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall|microphone"
+            android:stopWithTask="false" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
