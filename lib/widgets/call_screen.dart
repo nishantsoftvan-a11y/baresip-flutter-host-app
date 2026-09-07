@@ -29,9 +29,16 @@ class CallScreen extends StatelessWidget {
 
 // ── Incoming call ─────────────────────────────────────────────────────────────
 
-class _IncomingCallView extends StatelessWidget {
+class _IncomingCallView extends StatefulWidget {
   final SipState state;
   const _IncomingCallView({required this.state});
+
+  @override
+  State<_IncomingCallView> createState() => _IncomingCallViewState();
+}
+
+class _IncomingCallViewState extends State<_IncomingCallView> {
+  bool _actionTaken = false;
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +54,7 @@ class _IncomingCallView extends StatelessWidget {
         // Caller info
         Column(
           children: [
-            _Avatar(uri: state.callPeerUri, size: 100),
+            _Avatar(uri: widget.state.callPeerUri, size: 100),
             const SizedBox(height: 24),
             Text(
               'Incoming Call',
@@ -59,7 +66,7 @@ class _IncomingCallView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              _formatUri(state.callPeerUri),
+              _formatUri(widget.state.callPeerUri),
               style: theme.textTheme.headlineMedium?.copyWith(
                 color: colorScheme.onSurface,
                 fontWeight: FontWeight.bold,
@@ -70,7 +77,7 @@ class _IncomingCallView extends StatelessWidget {
         ),
 
         // Pulse animation ring
-        _PulseRing(child: _Avatar(uri: state.callPeerUri, size: 70)),
+        _PulseRing(child: _Avatar(uri: widget.state.callPeerUri, size: 70)),
 
         // Answer / Reject
         Padding(
@@ -80,17 +87,31 @@ class _IncomingCallView extends StatelessWidget {
             children: [
               _CallActionButton(
                 icon: Icons.call_end,
-                color: colorScheme.error,
+                color: _actionTaken
+                    ? colorScheme.error.withValues(alpha: 0.5)
+                    : colorScheme.error,
                 iconColor: colorScheme.onError,
                 label: 'Decline',
-                onTap: () => bloc.add(const RejectCallSip()),
+                onTap: _actionTaken
+                    ? null
+                    : () {
+                        setState(() => _actionTaken = true);
+                        bloc.add(const RejectCallSip());
+                      },
               ),
               _CallActionButton(
                 icon: Icons.call,
-                color: Colors.green.shade600,
+                color: _actionTaken
+                    ? Colors.green.shade800
+                    : Colors.green.shade600,
                 iconColor: Colors.white,
                 label: 'Answer',
-                onTap: () => bloc.add(const AnswerCallSip()),
+                onTap: _actionTaken
+                    ? null
+                    : () {
+                        setState(() => _actionTaken = true);
+                        bloc.add(const AnswerCallSip());
+                      },
               ),
             ],
           ),
@@ -234,7 +255,10 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 32),
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 32,
+                    ),
                     tooltip: 'Minimize call',
                     onPressed: () => bloc.add(const MinimizeCallSip()),
                   ),
@@ -244,7 +268,9 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                         _showStats ? Icons.analytics : Icons.analytics_outlined,
                         color: _showStats ? colorScheme.primary : null,
                       ),
-                      tooltip: _showStats ? 'Hide Call Stats' : 'Show Call Stats',
+                      tooltip: _showStats
+                          ? 'Hide Call Stats'
+                          : 'Show Call Stats',
                       onPressed: () => setState(() => _showStats = !_showStats),
                     )
                   else

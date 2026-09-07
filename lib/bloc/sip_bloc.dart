@@ -420,23 +420,21 @@ class SipBloc extends Bloc<SipEvent, SipState> {
         state.copyWith(mtlsCertDaysRemaining: () => event.event.daysRemaining),
       ),
     );
-    on<_TickDurationSip>(
-      (event, emit) {
-        if (_callStartTime != null) {
-          emit(
-            state.copyWith(
-              callDuration: DateTime.now().difference(_callStartTime!),
-            ),
-          );
-        } else {
-          emit(
-            state.copyWith(
-              callDuration: state.callDuration + const Duration(seconds: 1),
-            ),
-          );
-        }
-      },
-    );
+    on<_TickDurationSip>((event, emit) {
+      if (_callStartTime != null) {
+        emit(
+          state.copyWith(
+            callDuration: DateTime.now().difference(_callStartTime!),
+          ),
+        );
+      } else {
+        emit(
+          state.copyWith(
+            callDuration: state.callDuration + const Duration(seconds: 1),
+          ),
+        );
+      }
+    });
 
     // Subscribe to client event streams
     _subs.addAll([
@@ -690,10 +688,19 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     }
   }
 
+  DateTime? _lastAnswerTime;
+
   Future<void> _onAnswerCall(
     AnswerCallSip event,
     Emitter<SipState> emit,
   ) async {
+    final now = DateTime.now();
+    if (_lastAnswerTime != null &&
+        now.difference(_lastAnswerTime!).inMilliseconds < 800) {
+      return; // Debounce rapid clicks
+    }
+    _lastAnswerTime = now;
+
     try {
       final targetId =
           event.callId ??
@@ -708,15 +715,33 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     RejectCallSip event,
     Emitter<SipState> emit,
   ) async {
+    _failureDismissTimer?.cancel();
+    _stopTimer();
+    final targetId =
+        event.callId ??
+        state.incomingCall?.callId ??
+        (state.callState == CallState.incoming ? state.callId : null);
+
+    // If rejecting the primary incoming call, clear it immediately so UI returns to home screen
+    if (state.callState == CallState.incoming) {
+      emit(
+        state.copyWith(
+          callState: () => null,
+          incomingCall: () => null,
+          callPeerUri: '',
+          callId: 0,
+          callDuration: Duration.zero,
+          isMuted: false,
+          isOnHold: false,
+          callFailureReason: () => null,
+        ),
+      );
+    } else if (state.incomingCall != null &&
+        (targetId == null || targetId == state.incomingCall!.callId)) {
+      emit(state.copyWith(incomingCall: () => null));
+    }
+
     try {
-      final targetId =
-          event.callId ??
-          state.incomingCall?.callId ??
-          (state.callState == CallState.incoming ? state.callId : null);
-      if (state.incomingCall != null &&
-          (targetId == null || targetId == state.incomingCall!.callId)) {
-        emit(state.copyWith(incomingCall: () => null));
-      }
       await _client.rejectCall(callId: targetId);
     } catch (e) {
       emit(state.copyWith(lastError: () => e.toString()));
@@ -944,19 +969,50 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     if (e.state == CallState.closed) {
       _stopTimer();
       _callStartTime = null;
+
+      // If this event was for the secondary incoming call (call waiting)
+      if (state.incomingCall != null &&
+          (e.callId != 0 && e.callId == state.incomingCall!.callId)) {
+        emit(state.copyWith(incomingCall: () => null));
+        return;
+      }
+
       final rawReason = e.peerUri.trim();
       final reason = _formatCallFailureReason(rawReason);
-      emit(
-        state.copyWith(
-          callState: () => CallState.closed,
-          callFailureReason: () => reason,
-          isCallMinimized: false,
-          isMuted: false,
-          isOnHold: false,
-          callDuration: Duration.zero,
-        ),
-      );
-      _scheduleFailureDismissTimer();
+
+      final wasIncoming =
+          state.callState == CallState.incoming || state.hasIncoming;
+
+      // Incoming calls that are rejected or cancelled by caller should dismiss immediately.
+      // Normal hangup (empty reason) should also dismiss immediately.
+      if (wasIncoming || reason.isEmpty) {
+        _failureDismissTimer?.cancel();
+        emit(
+          state.copyWith(
+            callState: () => null,
+            incomingCall: () => null,
+            callPeerUri: '',
+            callId: 0,
+            callFailureReason: () => null,
+            isCallMinimized: false,
+            isMuted: false,
+            isOnHold: false,
+            callDuration: Duration.zero,
+          ),
+        );
+      } else {
+        emit(
+          state.copyWith(
+            callState: () => CallState.closed,
+            callFailureReason: () => reason,
+            isCallMinimized: false,
+            isMuted: false,
+            isOnHold: false,
+            callDuration: Duration.zero,
+          ),
+        );
+        _scheduleFailureDismissTimer();
+      }
     } else if (e.state == CallState.held) {
       _failureDismissTimer?.cancel();
       emit(
