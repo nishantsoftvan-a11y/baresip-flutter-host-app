@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sipsdk_flutter/sipsdk_flutter.dart';
@@ -388,9 +389,12 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     on<_OnDismissCallFailureSip>(_onDismissCallFailure);
 
     on<_OnCallStateChanged>(_onCallStateUpdated);
-    on<_OnAudioRouteChanged>(
-      (event, emit) => emit(state.copyWith(currentRoute: event.event.route)),
-    );
+    on<_OnAudioRouteChanged>((event, emit) {
+      debugPrint(
+        '[SipBloc] Native audio route confirmed: ${event.event.route}',
+      );
+      emit(state.copyWith(currentRoute: event.event.route));
+    });
     on<_OnNetworkStateChanged>((event, emit) {
       final isConnected = event.event.connected;
       if (!isConnected) {
@@ -997,6 +1001,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
             isCallMinimized: false,
             isMuted: false,
             isOnHold: false,
+            currentRoute: AudioRoute.earpiece,
             callDuration: Duration.zero,
           ),
         );
@@ -1008,6 +1013,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
             isCallMinimized: false,
             isMuted: false,
             isOnHold: false,
+            currentRoute: AudioRoute.earpiece,
             callDuration: Duration.zero,
           ),
         );

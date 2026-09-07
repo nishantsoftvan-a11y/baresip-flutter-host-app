@@ -132,6 +132,7 @@ class _ActiveCallView extends StatefulWidget {
 }
 
 class _ActiveCallViewState extends State<_ActiveCallView> {
+  final GlobalKey _audioRouteButtonKey = GlobalKey();
   bool _showStats = false;
   bool _isSharing = false;
   String? _prevPeerUri;
@@ -528,11 +529,12 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                             : null,
                       ),
                       _ToggleButton(
+                        key: _audioRouteButtonKey,
                         icon: _getRouteIcon(state.currentRoute),
                         label: _getRouteLabel(state.currentRoute),
                         active: state.currentRoute != AudioRoute.earpiece,
-                        onTap: isEstablished
-                            ? () => _handleSpeakerTap(context, state)
+                        onTap: isEstablished || isHeld
+                            ? () => _handleSpeakerTap(state)
                             : null,
                       ),
                     ],
@@ -769,41 +771,59 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
     }
   }
 
-  Future<void> _handleSpeakerTap(BuildContext context, SipState state) async {
+  Future<void> _handleSpeakerTap(SipState state) async {
     final client = SipClient.instance;
     final colorScheme = Theme.of(context).colorScheme;
 
     try {
       final routes = await client.getAvailableRoutes();
       final hasBluetooth = routes.contains(AudioRoute.bluetooth);
+      debugPrint('[CallScreen] Audio Route tapped | Current: ${state.currentRoute} | Available: $routes | hasBluetooth: $hasBluetooth');
 
       if (hasBluetooth) {
-        if (!context.mounted) return;
+        if (!mounted) return;
 
-        final selectedRoute = await showDialog<AudioRoute>(
+        final renderBox = _audioRouteButtonKey.currentContext?.findRenderObject() as RenderBox?;
+        final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+
+        final RelativeRect position;
+        if (renderBox != null && overlay != null) {
+          final buttonTopLeft = renderBox.localToGlobal(Offset.zero, ancestor: overlay);
+          final buttonSize = renderBox.size;
+          // Position menu directly above the audio route button
+          position = RelativeRect.fromLTRB(
+            buttonTopLeft.dx - 30,
+            buttonTopLeft.dy - 190,
+            overlay.size.width - (buttonTopLeft.dx + buttonSize.width) - 30,
+            overlay.size.height - buttonTopLeft.dy + 8,
+          );
+        } else {
+          final size = MediaQuery.of(context).size;
+          position = RelativeRect.fromLTRB(size.width / 4, size.height / 2, size.width / 4, size.height / 2);
+        }
+
+        final selectedRoute = await showMenu<AudioRoute>(
           context: context,
-          builder: (BuildContext ctx) {
-            return AlertDialog(
-              backgroundColor: colorScheme.surfaceContainerHigh,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              title: const Text(
-                'Select Audio Route',
-                textAlign: TextAlign.center,
-              ),
-              contentPadding: const EdgeInsets.fromLTRB(8, 16, 8, 16),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
+          position: position,
+          elevation: 8,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          color: colorScheme.surfaceContainerHigh,
+          items: [
+            PopupMenuItem<AudioRoute>(
+              value: AudioRoute.earpiece,
+              child: Row(
                 children: [
-                  ListTile(
-                    leading: Icon(
-                      Icons.phone_android,
-                      color: state.currentRoute == AudioRoute.earpiece
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                    ),
-                    title: Text(
+                  Icon(
+                    Icons.phone_android,
+                    color: state.currentRoute == AudioRoute.earpiece
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
                       'Earpiece',
                       style: TextStyle(
                         color: state.currentRoute == AudioRoute.earpiece
@@ -814,17 +834,26 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                             : FontWeight.normal,
                       ),
                     ),
-                    onTap: () => Navigator.of(ctx).pop(AudioRoute.earpiece),
                   ),
-                  Divider(color: colorScheme.outlineVariant, height: 1),
-                  ListTile(
-                    leading: Icon(
-                      Icons.volume_up,
-                      color: state.currentRoute == AudioRoute.speaker
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                    ),
-                    title: Text(
+                  if (state.currentRoute == AudioRoute.earpiece)
+                    Icon(Icons.check, size: 18, color: colorScheme.primary),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(height: 1),
+            PopupMenuItem<AudioRoute>(
+              value: AudioRoute.speaker,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.volume_up,
+                    color: state.currentRoute == AudioRoute.speaker
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
                       'Speaker',
                       style: TextStyle(
                         color: state.currentRoute == AudioRoute.speaker
@@ -835,17 +864,26 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                             : FontWeight.normal,
                       ),
                     ),
-                    onTap: () => Navigator.of(ctx).pop(AudioRoute.speaker),
                   ),
-                  Divider(color: colorScheme.outlineVariant, height: 1),
-                  ListTile(
-                    leading: Icon(
-                      Icons.bluetooth,
-                      color: state.currentRoute == AudioRoute.bluetooth
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                    ),
-                    title: Text(
+                  if (state.currentRoute == AudioRoute.speaker)
+                    Icon(Icons.check, size: 18, color: colorScheme.primary),
+                ],
+              ),
+            ),
+            const PopupMenuDivider(height: 1),
+            PopupMenuItem<AudioRoute>(
+              value: AudioRoute.bluetooth,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.bluetooth,
+                    color: state.currentRoute == AudioRoute.bluetooth
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
                       'Bluetooth',
                       style: TextStyle(
                         color: state.currentRoute == AudioRoute.bluetooth
@@ -856,25 +894,28 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                             : FontWeight.normal,
                       ),
                     ),
-                    onTap: () => Navigator.of(ctx).pop(AudioRoute.bluetooth),
                   ),
+                  if (state.currentRoute == AudioRoute.bluetooth)
+                    Icon(Icons.check, size: 18, color: colorScheme.primary),
                 ],
               ),
-            );
-          },
+            ),
+          ],
         );
 
         if (selectedRoute != null) {
+          debugPrint('[CallScreen] Route selected: $selectedRoute (current: ${state.currentRoute})');
           await client.setAudioRoute(selectedRoute);
         }
       } else {
         final next = state.currentRoute == AudioRoute.speaker
             ? AudioRoute.earpiece
             : AudioRoute.speaker;
+        debugPrint('[CallScreen] No Bluetooth device available. Toggling directly: ${state.currentRoute} -> $next');
         await client.setAudioRoute(next);
       }
     } catch (e) {
-      // ignore
+      debugPrint('[CallScreen] Error in _handleSpeakerTap: $e');
     }
   }
 }
@@ -982,6 +1023,7 @@ class _ToggleButton extends StatelessWidget {
   final VoidCallback? onTap;
 
   const _ToggleButton({
+    super.key,
     required this.icon,
     required this.label,
     required this.active,
