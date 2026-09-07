@@ -72,6 +72,17 @@ class MainActivity : FlutterActivity() {
         sdkCallback?.let { SipSdk.registerCallback(it) }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            keyguardManager.requestDismissKeyguard(this, null)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         checkFullScreenIntentPermission()

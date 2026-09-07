@@ -19,6 +19,7 @@ import com.sip.sipsdk.api.SdkCallback
 import com.sip.sipsdk.api.SipSdk
 import com.sip.sipsdk.call.CallManager
 import com.sip.sipsdk.model.CallState
+import com.sip.sip_sdk_flutter_example.MainActivity
 import com.sip.sip_sdk_flutter_example.audio.HostAudioEngine
 
 /**
@@ -283,20 +284,14 @@ class HostVoipForegroundService : Service(), SdkCallback {
     }
 
     private fun buildIncomingNotification(peer: String, callId: Long): Notification {
-        val incomingActivityIntent = Intent().apply {
-            setClassName(packageName, "com.sip.sip_sdk_flutter_example.IncomingCallActivity")
+        val targetIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
             putExtra("peer_uri", peer)
             putExtra("call_id", callId)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        val targetIntent = if (incomingActivityIntent.resolveActivity(packageManager) != null) {
-            incomingActivityIntent
-        } else {
-            packageManager.getLaunchIntentForPackage(packageName)?.apply {
-                putExtra("peer_uri", peer)
-                putExtra("call_id", callId)
-                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        } ?: Intent(this, MainActivity::class.java).apply {
+            putExtra("peer_uri", peer)
+            putExtra("call_id", callId)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val fullScreenPendingIntent = PendingIntent.getActivity(
             this, 10, targetIntent,
