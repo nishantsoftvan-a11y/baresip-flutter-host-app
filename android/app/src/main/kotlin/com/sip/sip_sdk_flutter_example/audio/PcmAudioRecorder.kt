@@ -119,6 +119,8 @@ class PcmAudioRecorder(
                         SipSdk.writeUplinkPcm(directBuffer, bytesRead)
                     }
                 }
+            } catch (e: InterruptedException) {
+                // Normal thread interruption on call stop
             } catch (e: Exception) {
                 Log.e(TAG, "Error in record loop: ${e.message}", e)
             } finally {

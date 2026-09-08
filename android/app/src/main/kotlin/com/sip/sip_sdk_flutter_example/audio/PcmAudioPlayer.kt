@@ -84,6 +84,8 @@ class PcmAudioPlayer(
                         Thread.sleep(5)
                     }
                 }
+            } catch (e: InterruptedException) {
+                // Normal thread interruption on call stop
             } catch (e: Exception) {
                 Log.e(TAG, "Error in playback loop: ${e.message}", e)
             } finally {

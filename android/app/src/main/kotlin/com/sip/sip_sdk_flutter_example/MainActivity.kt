@@ -62,9 +62,6 @@ class MainActivity : FlutterActivity() {
                     com.sip.sipsdk.model.RegistrationState.REGISTERED -> {
                         HostVoipForegroundService.startService(applicationContext)
                     }
-                    com.sip.sipsdk.model.RegistrationState.OFFLINE -> {
-                        HostVoipForegroundService.stopService(applicationContext)
-                    }
                     else -> {}
                 }
             }
