@@ -15,6 +15,15 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.sip.sipsdk.api.SdkCallback
 import com.sip.sipsdk.api.SipSdk
 import com.sip.sipsdk.call.CallManager
@@ -109,6 +118,77 @@ class HostVoipForegroundService : Service(), SdkCallback {
     private var isMuted = false
     private var currentPeer = "Call"
     private var incomingCallId: Long = 0L
+    private var connectivityManager: ConnectivityManager? = null
+
+    private var activeNetwork: Network? = null
+    private var switchJob: Job? = null
+    private var pendingNetworkRestart = false
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            // Seed initial network on startup; do not restart on existing connection
+            if (activeNetwork == null) {
+                activeNetwork = network
+                Log.i(TAG, "Initial network active: $network (skipping startup restart)")
+                return
+            }
+
+            // Same network re-reported by OS, ignore!
+            if (activeNetwork == network) {
+                return
+            }
+
+            Log.i(TAG, "Network interface changed from $activeNetwork to $network")
+            activeNetwork = network
+
+            // Debounce rapid switching (1000ms)
+            switchJob?.cancel()
+            switchJob = CoroutineScope(Dispatchers.IO).launch {
+                delay(1000)
+                try {
+                    if (CallManager.hasActiveCall()) {
+                        Log.i(TAG, "Active call in progress -> Deferring stack restart until call ends to preserve audio")
+                        pendingNetworkRestart = true
+                    } else {
+                        Log.i(TAG, "No active call -> Restarting SIP stack on new network interface")
+                        SipSdk.triggerRestart()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Network handover restart failed: ${e.message}")
+                }
+            }
+        }
+
+        override fun onLost(network: Network) {
+            Log.i(TAG, "Network lost: $network")
+            if (activeNetwork == network) {
+                activeNetwork = null
+            }
+        }
+    }
+
+    private fun registerNetworkMonitor() {
+        try {
+            connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            activeNetwork = connectivityManager?.activeNetwork
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            connectivityManager?.registerNetworkCallback(request, networkCallback)
+            Log.i(TAG, "registerNetworkMonitor: successfully registered (initial activeNetwork=$activeNetwork)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register network callback: ${e.message}", e)
+        }
+    }
+
+    private fun unregisterNetworkMonitor() {
+        try {
+            switchJob?.cancel()
+            switchJob = null
+            activeNetwork = null
+            connectivityManager?.unregisterNetworkCallback(networkCallback)
+        } catch (ignored: Exception) {}
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -123,6 +203,7 @@ class HostVoipForegroundService : Service(), SdkCallback {
         }
 
         SipSdk.registerCallback(this)
+        registerNetworkMonitor()
         Log.i(TAG, "HostVoipForegroundService created and registered with SipSdk")
     }
 
@@ -206,6 +287,18 @@ class HostVoipForegroundService : Service(), SdkCallback {
                 HostAudioEngine.getInstance(applicationContext).stopCallAudio()
                 wakeLock?.let { if (it.isHeld) it.release() }
                 startForegroundWithStandbyNotification()
+
+                if (pendingNetworkRestart) {
+                    pendingNetworkRestart = false
+                    Log.i(TAG, "Active call ended -> Executing deferred SIP stack restart on new network")
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            SipSdk.triggerRestart()
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Deferred network handover restart failed: ${e.message}")
+                        }
+                    }
+                }
             }
             else -> {}
         }
@@ -414,6 +507,7 @@ class HostVoipForegroundService : Service(), SdkCallback {
     }
 
     override fun onDestroy() {
+        unregisterNetworkMonitor()
         SipSdk.unregisterCallback(this)
         cancelIncomingNotification()
         HostAudioEngine.getInstance(applicationContext).stopCallAudio()
