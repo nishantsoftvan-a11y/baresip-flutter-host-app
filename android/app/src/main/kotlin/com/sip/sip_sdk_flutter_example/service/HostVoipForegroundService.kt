@@ -208,7 +208,16 @@ class HostVoipForegroundService : Service(), SdkCallback {
                 cancelIncomingNotification()
                 wakeLock?.acquire(60 * 60 * 1000L)
                 startForegroundWithActiveNotification(currentPeer)
-                HostAudioEngine.getInstance(applicationContext).startCallAudio()
+                val audioEngine = HostAudioEngine.getInstance(applicationContext)
+                if (!audioEngine.isRunning) {
+                    audioEngine.startCallAudio()
+                } else {
+                    audioEngine.onHold(false)
+                }
+            }
+            CallState.HELD -> {
+                Log.i(TAG, "SdkCallback: onCallState HELD for $peerUri")
+                HostAudioEngine.getInstance(applicationContext).onHold(true)
             }
             CallState.CLOSED -> {
                 cancelIncomingNotification()

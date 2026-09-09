@@ -516,7 +516,7 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
-                  // Row 1: mute, speaker
+                  // Row 1: mute, hold, speaker
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -526,6 +526,14 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                         active: state.isMuted,
                         onTap: isEstablished || isHeld
                             ? () => bloc.add(const ToggleMuteSip())
+                            : null,
+                      ),
+                      _ToggleButton(
+                        icon: state.isOnHold ? Icons.play_arrow : Icons.pause,
+                        label: state.isOnHold ? 'Resume' : 'Hold',
+                        active: state.isOnHold,
+                        onTap: isEstablished || isHeld
+                            ? () => bloc.add(const ToggleHoldSip())
                             : null,
                       ),
                       _ToggleButton(

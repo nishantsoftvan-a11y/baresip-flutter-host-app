@@ -98,6 +98,28 @@ class HostAudioEngine private constructor(private val context: Context) {
         Log.i(TAG, "HostAudioEngine stopped cleanly")
     }
 
+    val isRunning: Boolean
+        get() = isEngineRunning
+
+    @Synchronized
+    fun onHold(isHeld: Boolean) {
+        if (!isEngineRunning) return
+        if (isHeld) {
+            Log.i(TAG, "Call on hold — muting mic, stopping player, flushing buffers")
+            recorder?.setMute(true)
+            player?.stop()
+            player = null
+            SipSdk.clearPcmBuffers()
+        } else {
+            Log.i(TAG, "Call resumed — flushing buffers, unmuting mic, restarting player")
+            SipSdk.clearPcmBuffers()
+            recorder?.setMute(false)
+            if (player == null && isEngineRunning) {
+                player = PcmAudioPlayer(sampleRate, channelCount).apply { start() }
+            }
+        }
+    }
+
     fun setMute(muted: Boolean) {
         recorder?.setMute(muted)
     }

@@ -352,6 +352,7 @@ class SipBloc extends Bloc<SipEvent, SipState> {
   final _client = SipClient.instance;
   final List<StreamSubscription> _subs = [];
   Timer? _durationTimer;
+  bool _isHoldInProgress = false;
 
   SipBloc() : super(const SipState()) {
     on<InitializeSip>(_onInitialize);
@@ -821,12 +822,19 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     ToggleHoldSip event,
     Emitter<SipState> emit,
   ) async {
+    if (_isHoldInProgress) return;
+    _isHoldInProgress = true;
     final target = !state.isOnHold;
     try {
-      await _client.hold(target);
+      await _client.hold(
+        target,
+        callId: state.callId != 0 ? state.callId : null,
+      );
       emit(state.copyWith(isOnHold: target));
     } catch (e) {
       emit(state.copyWith(lastError: () => e.toString()));
+    } finally {
+      _isHoldInProgress = false;
     }
   }
 
