@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -95,5 +94,18 @@ configurations.all {
         force("androidx.test.espresso:espresso-core:3.6.1")
         force("androidx.test.espresso:espresso-idling-resource:3.6.1")
     }
+}
+
+val ensureBaselineProfilesDir = tasks.register("ensureBaselineProfilesDir") {
+    doLast {
+        val dir = File(layout.buildDirectory.get().asFile, "outputs/apk/release/baselineProfiles")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+    }
+}
+
+tasks.matching { it.name == "packageRelease" }.configureEach {
+    dependsOn(ensureBaselineProfilesDir)
 }
 

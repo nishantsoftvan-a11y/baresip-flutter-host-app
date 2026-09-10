@@ -1,9 +1,9 @@
 import 'dart:async';
-
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:sipsdk_flutter/sipsdk_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
 import '../bloc/home_bloc.dart';
 import '../bloc/sip_bloc.dart';
 import '../widgets/call_screen.dart';
@@ -26,9 +26,34 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showTestingAction = false;
   Timer? _profileTapDebounceTimer;
 
+  // Diagnostic export action (hidden by default, unlocked after 5 taps on title)
+  int _titleTapCount = 0;
+  bool _showDiagnosticAction = false;
+  Timer? _titleTapResetTimer;
+  bool _hasCrashReport = false;
+  bool _isExporting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPendingCrash();
+  }
+
+  Future<void> _checkPendingCrash() async {
+    try {
+      final hasCrash = await SipClient.instance.hasPendingCrashReport();
+      if (mounted && hasCrash) {
+        setState(() {
+          _hasCrashReport = true;
+        });
+      }
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _profileTapDebounceTimer?.cancel();
+    _titleTapResetTimer?.cancel();
     super.dispose();
   }
 
@@ -65,6 +90,212 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _handleTitleTap() {
+    _titleTapResetTimer?.cancel();
+    _titleTapCount++;
+
+    if (_titleTapCount >= 5) {
+      _titleTapCount = 0;
+      if (!_showDiagnosticAction) {
+        setState(() {
+          _showDiagnosticAction = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.bug_report, color: Colors.cyanAccent),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _hasCrashReport
+                        ? '🛠️ Diagnostics Unlocked: Previous Crash Detected!'
+                        : '🛠️ Diagnostic Tools Unlocked in App Bar!',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: _hasCrashReport
+                ? Colors.deepOrange.shade800
+                : Colors.blueGrey.shade900,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } else {
+      _titleTapResetTimer = Timer(const Duration(seconds: 2), () {
+        _titleTapCount = 0;
+      });
+    }
+  }
+
+  Future<void> _exportDiagnosticBundle(BuildContext context) async {
+    setState(() => _isExporting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final rootNav = Navigator.of(context, rootNavigator: true);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Packaging diagnostic bundle & logs...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final zipPath = await SipClient.instance.exportDiagnosticBundle();
+      if (mounted) rootNav.pop();
+
+      if (!mounted) return;
+
+      if (zipPath.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Failed to generate diagnostic bundle'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final hasCrash = await SipClient.instance.hasPendingCrashReport();
+      if (!context.mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          icon: Icon(
+            hasCrash ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+            color: hasCrash ? Colors.amber : Colors.green,
+            size: 44,
+          ),
+          title: Text(
+            hasCrash ? 'Diagnostic & Crash Report' : 'Diagnostic Bundle Ready',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (hasCrash) ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.redAccent.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        color: Colors.redAccent,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Previous fatal crash detected and attached as CRASH_REPORT.txt in this zip.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              const Text(
+                'Archive file generated:',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                zipPath,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  color: Colors.blueGrey,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            if (hasCrash)
+              TextButton(
+                onPressed: () async {
+                  await SipClient.instance.clearPendingCrashReport();
+                  if (context.mounted) {
+                    setState(() => _hasCrashReport = false);
+                    Navigator.of(dialogCtx).pop();
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Pending crash flags cleared'),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Clear Crash Flag'),
+              ),
+            TextButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: zipPath));
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Path copied to clipboard')),
+                );
+              },
+              child: const Text('Copy Path'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.share, size: 16),
+              label: const Text('Share ZIP'),
+              onPressed: () async {
+                Navigator.of(dialogCtx).pop();
+                final box = dialogCtx.findRenderObject() as RenderBox?;
+                await Share.shareXFiles(
+                  [XFile(zipPath)],
+                  text: 'LifeLine SIP SDK Diagnostic Report',
+                  subject: 'SIP SDK Diagnostic Bundle',
+                  sharePositionOrigin: box != null
+                      ? box.localToGlobal(Offset.zero) & box.size
+                      : null,
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) rootNav.pop();
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Error exporting bundle: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -82,23 +313,64 @@ class _HomeScreenState extends State<HomeScreen> {
         return Scaffold(
           appBar: AppBar(
             scrolledUnderElevation: 2.0,
-            title: Row(
-              children: [
-                Icon(Icons.phone_in_talk, color: colorScheme.primary, size: 24),
-                const SizedBox(width: 10),
-                Text(
-                  hasConfig
-                      ? (sipState.config!.displayName.isNotEmpty
-                            ? sipState.config!.displayName
-                            : sipState.config!.username)
-                      : 'SIP VoIP',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+            title: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _handleTitleTap,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.phone_in_talk,
+                    color: colorScheme.primary,
+                    size: 24,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  Text(
+                    hasConfig
+                        ? (sipState.config!.displayName.isNotEmpty
+                              ? sipState.config!.displayName
+                              : sipState.config!.username)
+                        : 'SIP VoIP',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
             ),
             actions: [
+              // Diagnostic Bundle Export button (Hidden by default; unlocked after 5 taps on title)
+              if (_showDiagnosticAction)
+                IconButton(
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(Icons.bug_report_outlined, color: Colors.cyan),
+                      if (_hasCrashReport)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            width: 9,
+                            height: 9,
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  tooltip: 'Export Diagnostic Bundle',
+                  onPressed: _isExporting
+                      ? null
+                      : () => _exportDiagnosticBundle(context),
+                ),
+
               // SDK Crash & Stability Test button (Unlocked after 10 taps on profile)
               if (_showTestingAction)
                 IconButton(
