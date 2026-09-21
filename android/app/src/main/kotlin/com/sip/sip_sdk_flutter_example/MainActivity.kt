@@ -19,6 +19,15 @@ class MainActivity : FlutterActivity() {
 
     private var sdkCallback: SdkCallback? = null
 
+    override fun configureFlutterEngine(flutterEngine: io.flutter.embedding.engine.FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        // [DEMO_RECORDING_TEST_FEATURE] Register MethodChannel for in-call demo recording
+        com.sip.sip_sdk_flutter_example.recording.DemoRecordingMethodHandler.register(
+            applicationContext,
+            flutterEngine.dartExecutor.binaryMessenger
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)

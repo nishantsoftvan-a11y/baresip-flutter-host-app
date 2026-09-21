@@ -8,6 +8,12 @@ import '../bloc/sip_bloc.dart';
 import '../utils/call_log_service.dart';
 import 'call_stats_widget.dart';
 
+// [DEMO_RECORDING_TEST_FEATURE] In-call demo recording
+import '../features/demo_recording/demo_recording_config.dart';
+import '../features/demo_recording/demo_recording_service.dart';
+import '../features/demo_recording/widgets/record_call_button.dart';
+import '../features/demo_recording/widgets/recordings_history_sheet.dart';
+
 class CallScreen extends StatelessWidget {
   const CallScreen({super.key});
 
@@ -191,7 +197,11 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
         prev.callState == CallState.established ||
         prev.callState == CallState.held;
     if (nowActive && !wasActive) _startLogPolling();
-    if (!nowActive && wasActive) _stopLogPolling();
+    if (!nowActive && wasActive) {
+      _stopLogPolling();
+      // [DEMO_RECORDING_TEST_FEATURE] Auto-finalize active recording on call end
+      _finalizeRecordingOnCallEnd();
+    }
 
     _prevPeerUri = s.callPeerUri;
     _prevCallState = s.callState;
@@ -200,7 +210,53 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
   @override
   void dispose() {
     _stopLogPolling();
+    // [DEMO_RECORDING_TEST_FEATURE] Finalize active recording if screen unmounts
+    _finalizeRecordingOnCallEnd();
     super.dispose();
+  }
+
+  void _finalizeRecordingOnCallEnd() {
+    if (!DemoRecordingConfig.enabled) return;
+    if (DemoRecordingService.instance.isRecording.value) {
+      DemoRecordingService.instance.stopRecording().then((saved) {
+        if (saved != null && mounted) {
+          final nav = Navigator.of(context, rootNavigator: true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle,
+                    color: Colors.greenAccent,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Call recording saved: ${saved.formattedDuration} (${saved.formattedSize})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'View / Share',
+                textColor: Colors.amberAccent,
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: nav.context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const RecordingsHistorySheet(),
+                  );
+                },
+              ),
+            ),
+          );
+        }
+      });
+    }
   }
 
   void _startLogPolling() {
@@ -263,19 +319,40 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                     tooltip: 'Minimize call',
                     onPressed: () => bloc.add(const MinimizeCallSip()),
                   ),
-                  if (isEstablished)
-                    IconButton(
-                      icon: Icon(
-                        _showStats ? Icons.analytics : Icons.analytics_outlined,
-                        color: _showStats ? colorScheme.primary : null,
-                      ),
-                      tooltip: _showStats
-                          ? 'Hide Call Stats'
-                          : 'Show Call Stats',
-                      onPressed: () => setState(() => _showStats = !_showStats),
-                    )
-                  else
-                    const SizedBox(width: 48),
+                  Row(
+                    children: [
+                      // [DEMO_RECORDING_TEST_FEATURE] Demo Recordings button
+                      if (DemoRecordingConfig.enabled)
+                        IconButton(
+                          icon: const Icon(Icons.history_edu_outlined),
+                          tooltip: 'Demo Recordings',
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => const RecordingsHistorySheet(),
+                            );
+                          },
+                        ),
+                      if (isEstablished)
+                        IconButton(
+                          icon: Icon(
+                            _showStats
+                                ? Icons.analytics
+                                : Icons.analytics_outlined,
+                            color: _showStats ? colorScheme.primary : null,
+                          ),
+                          tooltip: _showStats
+                              ? 'Hide Call Stats'
+                              : 'Show Call Stats',
+                          onPressed: () =>
+                              setState(() => _showStats = !_showStats),
+                        )
+                      else if (!DemoRecordingConfig.enabled)
+                        const SizedBox(width: 48),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -545,6 +622,13 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                             ? () => _handleSpeakerTap(state)
                             : null,
                       ),
+                      // [DEMO_RECORDING_TEST_FEATURE] Demo in-call record button
+                      if (DemoRecordingConfig.enabled &&
+                          (isEstablished || isHeld))
+                        RecordCallButton(
+                          peerUri: state.callPeerUri,
+                          callId: state.callId,
+                        ),
                     ],
                   ),
 
@@ -786,17 +870,25 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
     try {
       final routes = await client.getAvailableRoutes();
       final hasBluetooth = routes.contains(AudioRoute.bluetooth);
-      debugPrint('[CallScreen] Audio Route tapped | Current: ${state.currentRoute} | Available: $routes | hasBluetooth: $hasBluetooth');
+      debugPrint(
+        '[CallScreen] Audio Route tapped | Current: ${state.currentRoute} | Available: $routes | hasBluetooth: $hasBluetooth',
+      );
 
       if (hasBluetooth) {
         if (!mounted) return;
 
-        final renderBox = _audioRouteButtonKey.currentContext?.findRenderObject() as RenderBox?;
-        final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+        final renderBox =
+            _audioRouteButtonKey.currentContext?.findRenderObject()
+                as RenderBox?;
+        final overlay =
+            Overlay.of(context).context.findRenderObject() as RenderBox?;
 
         final RelativeRect position;
         if (renderBox != null && overlay != null) {
-          final buttonTopLeft = renderBox.localToGlobal(Offset.zero, ancestor: overlay);
+          final buttonTopLeft = renderBox.localToGlobal(
+            Offset.zero,
+            ancestor: overlay,
+          );
           final buttonSize = renderBox.size;
           // Position menu directly above the audio route button
           position = RelativeRect.fromLTRB(
@@ -807,7 +899,12 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
           );
         } else {
           final size = MediaQuery.of(context).size;
-          position = RelativeRect.fromLTRB(size.width / 4, size.height / 2, size.width / 4, size.height / 2);
+          position = RelativeRect.fromLTRB(
+            size.width / 4,
+            size.height / 2,
+            size.width / 4,
+            size.height / 2,
+          );
         }
 
         final selectedRoute = await showMenu<AudioRoute>(
@@ -912,14 +1009,18 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
         );
 
         if (selectedRoute != null) {
-          debugPrint('[CallScreen] Route selected: $selectedRoute (current: ${state.currentRoute})');
+          debugPrint(
+            '[CallScreen] Route selected: $selectedRoute (current: ${state.currentRoute})',
+          );
           await client.setAudioRoute(selectedRoute);
         }
       } else {
         final next = state.currentRoute == AudioRoute.speaker
             ? AudioRoute.earpiece
             : AudioRoute.speaker;
-        debugPrint('[CallScreen] No Bluetooth device available. Toggling directly: ${state.currentRoute} -> $next');
+        debugPrint(
+          '[CallScreen] No Bluetooth device available. Toggling directly: ${state.currentRoute} -> $next',
+        );
         await client.setAudioRoute(next);
       }
     } catch (e) {

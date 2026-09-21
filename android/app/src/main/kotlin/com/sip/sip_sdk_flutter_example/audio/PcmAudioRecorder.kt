@@ -117,6 +117,12 @@ class PcmAudioRecorder(
                         directBuffer.limit(bytesRead)
 
                         SipSdk.writeUplinkPcm(directBuffer, bytesRead)
+                        // [DEMO_RECORDING_TEST_FEATURE] Non-blocking tap for demo call recording
+                        com.sip.sip_sdk_flutter_example.recording.CallAudioRecorder.feedUplink(
+                            if (isMuted.get()) zeroArray else directArray,
+                            0,
+                            bytesRead
+                        )
                     }
                 }
             } catch (e: InterruptedException) {

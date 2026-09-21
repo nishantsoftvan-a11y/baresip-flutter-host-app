@@ -80,6 +80,8 @@ class PcmAudioPlayer(
                         directBuffer.limit(bytesRead)
                         directBuffer.get(directArray, 0, bytesRead)
                         track.write(directArray, 0, bytesRead, AudioTrack.WRITE_BLOCKING)
+                        // [DEMO_RECORDING_TEST_FEATURE] Non-blocking tap for demo call recording
+                        com.sip.sip_sdk_flutter_example.recording.CallAudioRecorder.feedDownlink(directArray, 0, bytesRead)
                     } else {
                         Thread.sleep(5)
                     }

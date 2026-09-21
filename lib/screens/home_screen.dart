@@ -14,6 +14,10 @@ import '../widgets/reg_status_chip.dart';
 import 'sdk_crash_test_screen.dart';
 import 'setup_screen.dart';
 
+// [DEMO_RECORDING_TEST_FEATURE] Demo call recordings
+import '../features/demo_recording/demo_recording_config.dart';
+import '../features/demo_recording/widgets/recordings_history_sheet.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -382,6 +386,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       MaterialPageRoute(
                         builder: (_) => const SdkCrashTestScreen(),
                       ),
+                    );
+                  },
+                ),
+
+              // [DEMO_RECORDING_TEST_FEATURE] Demo Recordings History
+              if (DemoRecordingConfig.enabled)
+                IconButton(
+                  icon: const Icon(Icons.mic_none_rounded),
+                  tooltip: 'Demo Recordings',
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const RecordingsHistorySheet(),
                     );
                   },
                 ),
