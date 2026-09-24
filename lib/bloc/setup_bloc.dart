@@ -7,7 +7,7 @@ import '../features/user_profiles/domain/models/user_profile.dart';
 
 // ── SetupPendingAction ────────────────────────────────────────────────────────
 
-enum SetupPendingAction { none, plainLogin, mtlsPem, csrEnroll }
+enum SetupPendingAction { none, plainLogin, mtlsPem }
 
 // ── SetupEvent ────────────────────────────────────────────────────────────────
 
@@ -241,7 +241,6 @@ class SetupState {
 
   final SetupPendingAction pendingAction;
   final SipConfig? pendingConfig;
-  final CsrConfig? pendingCsrConfig;
   final MtlsConfig? pendingMtlsConfig;
 
   const SetupState({
@@ -303,7 +302,6 @@ class SetupState {
     this.syncAuthToken,
     this.pendingAction = SetupPendingAction.none,
     this.pendingConfig,
-    this.pendingCsrConfig,
     this.pendingMtlsConfig,
   });
 
@@ -360,7 +358,6 @@ class SetupState {
     String? Function()? syncAuthToken,
     SetupPendingAction? pendingAction,
     SipConfig? Function()? pendingConfig,
-    CsrConfig? Function()? pendingCsrConfig,
     MtlsConfig? Function()? pendingMtlsConfig,
   }) {
     return SetupState(
@@ -445,9 +442,6 @@ class SetupState {
       pendingConfig: pendingConfig != null
           ? pendingConfig()
           : this.pendingConfig,
-      pendingCsrConfig: pendingCsrConfig != null
-          ? pendingCsrConfig()
-          : this.pendingCsrConfig,
       pendingMtlsConfig: pendingMtlsConfig != null
           ? pendingMtlsConfig()
           : this.pendingMtlsConfig,
@@ -738,7 +732,6 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
         state.copyWith(
           pendingAction: SetupPendingAction.none,
           pendingConfig: () => null,
-          pendingCsrConfig: () => null,
           pendingMtlsConfig: () => null,
         ),
       );
@@ -806,71 +799,21 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
     );
 
     if (state.useMtls) {
-      if (state.useCsr) {
-        emit(
-          state.copyWith(
-            isEnrolling: true,
-            enrollmentLogs: [
-              '🔑 Generating Cryptographic EC Keypair (secp256r1)...',
-            ],
-          ),
-        );
+      final mtlsConfig = MtlsConfig.pem(
+        certAlias: alias,
+        clientCertPem: event.clientCertPem.trim(),
+        privateKeyPem: event.privateKeyPem.trim(),
+        caCertPem: event.caCertPem.trim(),
+        verifyServer: true,
+      );
 
-        await Future.delayed(const Duration(milliseconds: 600));
-        emit(
-          state.copyWith(
-            enrollmentLogs: [
-              ...state.enrollmentLogs,
-              '📄 Constructing PKCS#10 Certificate Signing Request...',
-            ],
-          ),
-        );
-
-        await Future.delayed(const Duration(milliseconds: 600));
-        emit(
-          state.copyWith(
-            enrollmentLogs: [
-              ...state.enrollmentLogs,
-              '🌐 Connecting to CA Enrollment Service at ${event.enrollmentUrl.trim()}...',
-            ],
-          ),
-        );
-
-        final csrConfig = CsrConfig(
-          certAlias: alias,
-          username: event.username.trim().isEmpty
-              ? alias
-              : event.username.trim(),
-          enrollmentUrl: event.enrollmentUrl.trim(),
-          caCertPem: event.caCertPem.trim(),
-          extraHeaders: {'Authorization': 'Bearer ${event.authToken.trim()}'},
-          verifyServer: true,
-        );
-
-        emit(
-          state.copyWith(
-            pendingAction: SetupPendingAction.csrEnroll,
-            pendingConfig: () => config,
-            pendingCsrConfig: () => csrConfig,
-          ),
-        );
-      } else {
-        final mtlsConfig = MtlsConfig.pem(
-          certAlias: alias,
-          clientCertPem: event.clientCertPem.trim(),
-          privateKeyPem: event.privateKeyPem.trim(),
-          caCertPem: event.caCertPem.trim(),
-          verifyServer: true,
-        );
-
-        emit(
-          state.copyWith(
-            pendingAction: SetupPendingAction.mtlsPem,
-            pendingConfig: () => config,
-            pendingMtlsConfig: () => mtlsConfig,
-          ),
-        );
-      }
+      emit(
+        state.copyWith(
+          pendingAction: SetupPendingAction.mtlsPem,
+          pendingConfig: () => config,
+          pendingMtlsConfig: () => mtlsConfig,
+        ),
+      );
     } else {
       emit(
         state.copyWith(

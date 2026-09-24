@@ -204,12 +204,6 @@ class InitializeWithMtlsAndLoginSip extends SipEvent {
   const InitializeWithMtlsAndLoginSip(this.config, {this.mtlsConfig});
 }
 
-class InitializeWithCsrAndLoginSip extends SipEvent {
-  final SipConfig config;
-  final CsrConfig csrConfig;
-  const InitializeWithCsrAndLoginSip(this.config, this.csrConfig);
-}
-
 class LoginSip extends SipEvent {
   const LoginSip();
 }
@@ -356,7 +350,6 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     on<InitializeSip>(_onInitialize);
     on<InitializeAndLoginSip>(_onInitializeAndLogin);
     on<InitializeWithMtlsAndLoginSip>(_onInitializeWithMtlsAndLogin);
-    on<InitializeWithCsrAndLoginSip>(_onInitializeWithCsrAndLogin);
     on<LoginSip>(_onLogin);
     on<LogoutSip>(_onLogout);
     on<GoOfflineSip>(_onGoOffline);
@@ -539,42 +532,6 @@ class SipBloc extends Bloc<SipEvent, SipState> {
       }
 
       // Step 3: Start the SIP service — cert files are now on disk
-      await _client.login();
-    } catch (e) {
-      emit(state.copyWith(lastError: () => e.toString()));
-    } finally {
-      emit(state.copyWith(isBusy: false));
-    }
-  }
-
-  Future<void> _onInitializeWithCsrAndLogin(
-    InitializeWithCsrAndLoginSip event,
-    Emitter<SipState> emit,
-  ) async {
-    emit(state.copyWith(isBusy: true));
-    try {
-      // Step 1: Initialize SDK
-      await _client.initialize(event.config);
-      emit(state.copyWith(config: () => event.config));
-
-      // Step 2: Provision CSR mTLS cert files AFTER initialize
-      final result = await _client.configureCsrMtls(event.csrConfig);
-      emit(state.copyWith(lastMtlsResult: () => result));
-      if (!result.isSuccess) {
-        emit(
-          state.copyWith(
-            lastError: () => 'CSR mTLS enrollment failed: ${result.message}',
-            isBusy: false,
-          ),
-        );
-        return;
-      }
-      final info = await _client.getMtlsCertificateInfo(
-        event.csrConfig.certAlias,
-      );
-      emit(state.copyWith(mtlsCertInfo: () => info));
-
-      // Step 3: Start the SIP service
       await _client.login();
     } catch (e) {
       emit(state.copyWith(lastError: () => e.toString()));

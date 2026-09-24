@@ -113,29 +113,32 @@ class _WatchSetupFormState extends State<_WatchSetupForm> {
   void _handleSetupBloc(BuildContext context, SetupState state) {
     if (state.syncToken != _lastSyncToken) {
       _lastSyncToken = state.syncToken;
-      if (state.syncUsername != null) _usernameCtrl.text = state.syncUsername!;
-      if (state.syncPassword != null) _passwordCtrl.text = state.syncPassword!;
-      if (state.syncHost != null) _hostCtrl.text = state.syncHost!;
-      if (state.syncPort != null) _portCtrl.text = state.syncPort!;
-      if (state.syncStun != null) _stunCtrl.text = state.syncStun!;
-      if (state.syncAuthUsername != null)
+      if (state.syncUsername != null) {
+        _usernameCtrl.text = state.syncUsername!;
+      }
+      if (state.syncPassword != null) {
+        _passwordCtrl.text = state.syncPassword!;
+      }
+      if (state.syncHost != null) {
+        _hostCtrl.text = state.syncHost!;
+      }
+      if (state.syncPort != null) {
+        _portCtrl.text = state.syncPort!;
+      }
+      if (state.syncStun != null) {
+        _stunCtrl.text = state.syncStun!;
+      }
+      if (state.syncAuthUsername != null) {
         _authUsernameCtrl.text = state.syncAuthUsername!;
-      if (state.syncMtlsAlias != null)
+      }
+      if (state.syncMtlsAlias != null) {
         _mtlsAliasCtrl.text = state.syncMtlsAlias!;
+      }
     }
 
     if (state.pendingAction != SetupPendingAction.none) {
       final sipBloc = context.read<SipBloc>();
       switch (state.pendingAction) {
-        case SetupPendingAction.csrEnroll:
-          if (state.pendingConfig != null && state.pendingCsrConfig != null) {
-            sipBloc.add(
-              InitializeWithCsrAndLoginSip(
-                state.pendingConfig!,
-                state.pendingCsrConfig!,
-              ),
-            );
-          }
         case SetupPendingAction.mtlsPem:
           if (state.pendingConfig != null && state.pendingMtlsConfig != null) {
             sipBloc.add(

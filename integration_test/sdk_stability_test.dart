@@ -178,17 +178,18 @@ void main() {
       expect(pemRes.isFailure, isTrue);
       print('  ✓ TC-15: Garbage PEM headers caught safely by CertificateFactory');
 
-      // TC-16: Unreachable CA CSR endpoint
-      final csrRes = await client.configureCsrMtls(
-        const CsrConfig(
-          enrollmentUrl: 'http://192.0.2.1:9999/unreachable-ca',
-          certAlias: 'test_auto_csr',
-          username: 'test_user',
+      // TC-16: Malformed private key in configureMtls
+      final mtlsFailRes = await client.configureMtls(
+        const MtlsConfig.pem(
+          certAlias: 'test_bad_key',
+          clientCertPem: '-----BEGIN CERTIFICATE-----\nFakeCert\n-----END CERTIFICATE-----',
+          privateKeyPem: '-----BEGIN PRIVATE KEY-----\nCorruptedKey\n-----END PRIVATE KEY-----',
           caCertPem: '-----BEGIN CERTIFICATE-----\nFakeCa\n-----END CERTIFICATE-----',
+          verifyServer: true,
         ),
       );
-      expect(csrRes.isFailure, isTrue);
-      print('  ✓ TC-16: Unreachable CSR network error caught in IO coroutine');
+      expect(mtlsFailRes.isFailure, isTrue);
+      print('  ✓ TC-16: Malformed private key handled safely by configureMtls');
 
       // TC-17: Remove non-existent alias
       await client.removeMtlsCredentials('non_existent_auto_999').catchError((_) {});

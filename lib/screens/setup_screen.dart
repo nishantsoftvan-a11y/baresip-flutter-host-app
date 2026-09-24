@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
-
 import '../bloc/setup_bloc.dart';
 import '../bloc/sip_bloc.dart';
 import '../constants.dart';
@@ -431,8 +430,6 @@ class _SetupFormState extends State<_SetupForm> {
           }
           break;
         case SetupPendingAction.none:
-          break;
-        default:
           break;
       }
 

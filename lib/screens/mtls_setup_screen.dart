@@ -295,8 +295,9 @@ class _MtlsSetupFormState extends State<_MtlsSetupForm> {
     _lastSyncToken = state.syncToken;
     if (state.syncMtlsAlias != null) _aliasCtrl.text = state.syncMtlsAlias!;
     if (state.syncUsername != null) _usernameCtrl.text = state.syncUsername!;
-    if (state.syncDisplayName != null)
+    if (state.syncDisplayName != null) {
       _displayCtrl.text = state.syncDisplayName!;
+    }
     if (state.syncHost != null) _hostCtrl.text = state.syncHost!;
     if (state.syncPort != null) _portCtrl.text = state.syncPort!;
   }

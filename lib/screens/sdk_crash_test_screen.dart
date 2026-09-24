@@ -608,32 +608,32 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
       CrashTestCase(
         tcId: 'TC-16',
         id: 'sec_3_unreachable_csr',
-        title: '4.3 Unreachable CA CSR Enrollment',
+        title: '4.3 Malformed Certificate in configureMtls',
         category: TestCategory.security,
-        targetLayer: 'SDK:EnrollmentClient',
-        triggerAction: 'Submit CSR request to non-existent endpoint',
-        expectedResult: 'Network failure returned safely as MtlsResult.Failure',
+        targetLayer: 'SDK:CertificateManager',
+        triggerAction: 'Submit malformed PEM to configureMtls',
+        expectedResult: 'Parse failure returned safely as MtlsResult.Failure',
         description:
-            'Generates EC key pair and submits CSR to a non-existent / unreachable CA server.',
+            'Passes corrupted PEM certificate content to configureMtls.',
         potentialCrashRisk:
-            'Socket timeout / Network on main thread exception locking the app',
+            'CertificateFactory / OpenSSL crash on invalid PEM headers',
         crashGenerationLogic:
-            'Requesting automatic CSR enrollment from an unreachable CA endpoint.',
+            'Invoking configureMtls with garbage PEM strings.',
         resolutionLogic:
-            'Wrapped network calls in Dispatchers.IO coroutine scopes with guaranteed Flutter result dispatch.',
+            'Handled via native validation and safe MtlsResult error dispatch.',
         action: () async {
           final client = SipClient.instance;
-          final result = await client.configureCsrMtls(
-            const CsrConfig(
-              enrollmentUrl:
-                  'http://192.0.2.1:9999/non-existent-ca-csr-endpoint',
-              certAlias: 'test_unreachable_csr',
-              username: 'test_agent_1001',
-              caCertPem: '-----BEGIN CERTIFICATE-----\nFakeCaData',
+          final result = await client.configureMtls(
+            const MtlsConfig.pem(
+              certAlias: 'test_malformed_cert',
+              clientCertPem: '-----BEGIN CERTIFICATE-----\nCorruptedData\n-----END CERTIFICATE-----',
+              privateKeyPem: '-----BEGIN PRIVATE KEY-----\nCorruptedKey\n-----END PRIVATE KEY-----',
+              caCertPem: '-----BEGIN CERTIFICATE-----\nFakeCaData\n-----END CERTIFICATE-----',
+              verifyServer: true,
             ),
           );
           if (result.isFailure) {
-            return 'Handled safely: Network failure caught (${result.errorCode}): ${result.message}';
+            return 'Handled safely: Parse failure caught (${result.errorCode}): ${result.message}';
           }
           return 'Result: Success (${result.message})';
         },
