@@ -901,11 +901,20 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     if (e.state == CallState.closed) {
       _stopTimer();
       _callStartTime = null;
-      final rawReason = e.peerUri.trim();
-      final reason = _formatCallFailureReason(rawReason);
+      final rawReason = (e.reason != null && e.reason!.trim().isNotEmpty)
+          ? e.reason!.trim()
+          : (e.peerUri.isNotEmpty && !e.peerUri.startsWith('sip:')
+              ? e.peerUri.trim()
+              : '');
+      final reason = rawReason.isNotEmpty
+          ? _formatCallFailureReason(rawReason)
+          : 'Call Ended';
       emit(
         state.copyWith(
           callState: () => CallState.closed,
+          callPeerUri: (e.peerUri.isNotEmpty && e.peerUri.startsWith('sip:'))
+              ? e.peerUri
+              : state.callPeerUri,
           callFailureReason: () => reason,
           isCallMinimized: false,
           isMuted: false,
@@ -970,14 +979,24 @@ class SipBloc extends Bloc<SipEvent, SipState> {
     }
   }
 
-  String _formatCallFailureReason(String raw) =>
-      SipErrorConstants.formatReason(raw);
+  String _formatCallFailureReason(String raw) {
+    if (raw.trim().isEmpty) return 'Call Ended';
+    final formatted = SipErrorConstants.formatReason(raw);
+    final trimmedRaw = raw.trim();
+    if (trimmedRaw.isNotEmpty &&
+        !trimmedRaw.startsWith('sip:') &&
+        formatted.toLowerCase() != trimmedRaw.toLowerCase() &&
+        !formatted.toLowerCase().contains(trimmedRaw.toLowerCase())) {
+      return '$formatted\n$trimmedRaw';
+    }
+    return formatted;
+  }
 
   Timer? _failureDismissTimer;
 
   void _scheduleFailureDismissTimer() {
     _failureDismissTimer?.cancel();
-    _failureDismissTimer = Timer(const Duration(seconds: 3), () {
+    _failureDismissTimer = Timer(const Duration(seconds: 4), () {
       if (!isClosed) {
         add(const _OnDismissCallFailureSip());
       }

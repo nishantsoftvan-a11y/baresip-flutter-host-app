@@ -419,7 +419,7 @@ class _ErrorBanner extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
-              maxLines: 2,
+              maxLines: 8,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -667,16 +667,20 @@ class _OngoingCallBanner extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        isHeld
-                            ? 'Call on hold'
-                            : (isEstablished ? 'Active Call' : state.callLabel),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: colorScheme.onPrimaryContainer.withValues(
-                            alpha: 0.8,
+                      Flexible(
+                        child: Text(
+                          isHeld
+                              ? 'Call on hold'
+                              : (isEstablished ? 'Active Call' : state.callLabel),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.onPrimaryContainer.withValues(
+                              alpha: 0.8,
+                            ),
                           ),
+                          maxLines: 8,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       if (isEstablished) ...[
@@ -702,7 +706,7 @@ class _OngoingCallBanner extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onPrimaryContainer,
                     ),
-                    maxLines: 1,
+                    maxLines: 8,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],

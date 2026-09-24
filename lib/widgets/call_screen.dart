@@ -58,13 +58,18 @@ class _IncomingCallView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              _formatUri(state.callPeerUri),
-              style: theme.textTheme.headlineMedium?.copyWith(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.bold,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                _formatUri(state.callPeerUri),
+                maxLines: 8,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -358,35 +363,42 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.pause_circle_filled,
-                          color: colorScheme.onSecondaryContainer,
-                        ),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Call on hold',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: colorScheme.onSecondaryContainer,
-                              ),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.pause_circle_filled,
+                            color: colorScheme.onSecondaryContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Call on hold',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: colorScheme.onSecondaryContainer,
+                                  ),
+                                ),
+                                Text(
+                                  _formatUri(state.heldCalls.last.peerUri),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: colorScheme.onSecondaryContainer,
+                                  ),
+                                  maxLines: 8,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
-                            Text(
-                              _formatUri(state.heldCalls.last.peerUri),
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: colorScheme.onSecondaryContainer,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: () => bloc.add(const SwapCallsSip()),
                       icon: const Icon(Icons.swap_calls, size: 18),
@@ -405,9 +417,10 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
             // Status label
             if (state.hasCallFailure)
               Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 8,
+                  vertical: 10,
                 ),
                 decoration: BoxDecoration(
                   color: colorScheme.errorContainer,
@@ -415,37 +428,49 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
                       Icons.error_outline,
                       color: colorScheme.onErrorContainer,
-                      size: 18,
+                      size: 20,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      state.callFailureReason!,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onErrorContainer,
-                        fontWeight: FontWeight.bold,
+                    Flexible(
+                      child: Text(
+                        state.callFailureReason!,
+                        maxLines: 8,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
                 ),
               )
             else
-              Text(
-                state.callLabel,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: isEstablished
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
-                  fontWeight: isEstablished
-                      ? FontWeight.bold
-                      : FontWeight.normal,
-                  letterSpacing: 1.5,
-                  fontFeatures: isEstablished
-                      ? const [FontFeature.tabularFigures()]
-                      : null,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  state.callLabel,
+                  maxLines: 8,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: isEstablished
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+                    fontWeight: isEstablished
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    letterSpacing: 1.5,
+                    fontFeatures: isEstablished
+                        ? const [FontFeature.tabularFigures()]
+                        : null,
+                  ),
                 ),
               ),
 
@@ -456,13 +481,18 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
             const SizedBox(height: 16),
 
             // Peer URI
-            Text(
-              _formatUri(state.callPeerUri),
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.bold,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                _formatUri(state.callPeerUri),
+                maxLines: 8,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
             ),
 
             if (isHeld)
@@ -602,6 +632,8 @@ class _ActiveCallViewState extends State<_ActiveCallView> {
                               ),
                               Text(
                                 _formatUri(state.incomingCall!.peerUri),
+                                maxLines: 8,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
