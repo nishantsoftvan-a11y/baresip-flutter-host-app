@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sipsdk_flutter/sipsdk_flutter.dart';
+import '../bloc/sip_bloc.dart';
 import '../utils/pdf_report_generator.dart';
 
 /// Test execution status.
@@ -626,9 +628,12 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
           final result = await client.configureMtls(
             const MtlsConfig.pem(
               certAlias: 'test_malformed_cert',
-              clientCertPem: '-----BEGIN CERTIFICATE-----\nCorruptedData\n-----END CERTIFICATE-----',
-              privateKeyPem: '-----BEGIN PRIVATE KEY-----\nCorruptedKey\n-----END PRIVATE KEY-----',
-              caCertPem: '-----BEGIN CERTIFICATE-----\nFakeCaData\n-----END CERTIFICATE-----',
+              clientCertPem:
+                  '-----BEGIN CERTIFICATE-----\nCorruptedData\n-----END CERTIFICATE-----',
+              privateKeyPem:
+                  '-----BEGIN PRIVATE KEY-----\nCorruptedKey\n-----END PRIVATE KEY-----',
+              caCertPem:
+                  '-----BEGIN CERTIFICATE-----\nFakeCaData\n-----END CERTIFICATE-----',
               verifyServer: true,
             ),
           );
@@ -660,6 +665,99 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
               .removeMtlsCredentials('non_existent_alias_999')
               .catchError((_) {});
           return 'Handled safely: Missing alias removal treated as safe no-op without crash';
+        },
+      ),
+      CrashTestCase(
+        tcId: 'TC-17b',
+        id: 'sec_5_dynamic_cert_renewal',
+        title: '4.5 Dynamic Certificate Renewal on Running Engine',
+        category: TestCategory.security,
+        targetLayer: 'SDK:SIPSDKManager / TLS Transport',
+        triggerAction:
+            'Re-apply active certificate via configureMtls() while running',
+        expectedResult:
+            'Transport reset (uag_reset_transp) triggered & registered without engine restart',
+        description:
+            'Tests live TLS certificate renewal while the SIP engine is running. Dynamically re-provisions active certificate credentials, triggering native bs_reset_transp(1, 1) and re-registration.',
+        potentialCrashRisk:
+            'Socket teardown race condition, SIGSEGV on active TLS context replacement, or call drop',
+        crashGenerationLogic:
+            'Overwriting TLS certificates on disk and calling bs_reset_transp while SIP stack is actively servicing events.',
+        resolutionLogic:
+            'Thread-safe command queue (mqueue command 9) safely handles transport tear-down and re-registration on baresip thread.',
+        action: () async {
+          final client = SipClient.instance;
+          final sipBloc = context.read<SipBloc>();
+          final config = sipBloc.state.config;
+          String alias = config?.mtlsAlias?.trim() ?? '';
+          if (alias.isEmpty) {
+            alias = sipBloc.state.mtlsCertInfo?.alias ?? '';
+          }
+          if (alias.isEmpty) {
+            alias = 'default';
+          }
+
+          // Step 1: Read currently active credentials on disk (Option 2)
+          final props = await client.getMtlsProperties(alias);
+          String clientCertPem = '';
+          String privateKeyPem = '';
+          String caCertPem = '';
+
+          if (props != null && props['clientCertPath'] != null) {
+            try {
+              final certFile = File(props['clientCertPath']!);
+              final keyFile = File(props['privateKeyPath'] ?? '');
+              final caPath = props['caCertPath'];
+              final caFile = (caPath != null && caPath.isNotEmpty)
+                  ? File(caPath)
+                  : null;
+
+              if (await certFile.exists()) {
+                clientCertPem = await certFile.readAsString();
+              }
+              if (await keyFile.exists()) {
+                privateKeyPem = await keyFile.readAsString();
+              }
+              if (caFile != null && await caFile.exists()) {
+                caCertPem = await caFile.readAsString();
+              }
+            } catch (_) {}
+          }
+
+          // Fallback to sample valid test certificate if no active credentials on disk
+          if (clientCertPem.isEmpty || privateKeyPem.isEmpty) {
+            clientCertPem = _sampleValidCertPem;
+            privateKeyPem = _sampleValidKeyPem;
+            caCertPem = _sampleValidCaPem;
+          }
+
+          // Step 2: Trigger dynamic renewal via configureMtls while engine is running
+          final result = await client.configureMtls(
+            MtlsConfig.pem(
+              certAlias: alias,
+              clientCertPem: clientCertPem,
+              privateKeyPem: privateKeyPem,
+              caCertPem: caCertPem,
+              verifyServer: true,
+            ),
+          );
+
+          if (result.isFailure) {
+            return 'Failed: Dynamic certificate renewal rejected (${result.errorCode}): ${result.message}';
+          }
+
+          // Step 3: Fetch updated certificate metadata
+          final certInfo = await client.getMtlsCertificateInfo(alias);
+          final validTo = certInfo?.notAfter.toIso8601String() ?? 'N/A';
+          final subject = certInfo?.subjectDN ?? 'N/A';
+          final serial = certInfo?.serialNumber ?? 'N/A';
+
+          return 'Handled safely: Dynamic renewal executed on running engine.\n'
+              '• Alias: $alias\n'
+              '• Subject: $subject\n'
+              '• Serial: $serial\n'
+              '• Valid Until: $validTo\n'
+              '• Native TLS transport reset (uag_reset_transp) dispatched without engine restart.';
         },
       ),
 
@@ -1503,3 +1601,94 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
     );
   }
 }
+
+// ── Sample Valid mTLS Test Certificate Fallback ──────────────────────────────
+const String _sampleValidCertPem = '''-----BEGIN CERTIFICATE-----
+MIIEmTCCAoGgAwIBAgIUUF88P/MO/we3a9mHqe/jntp/xk0wDQYJKoZIhvcNAQEL
+BQAwXzE5MDcGA1UEAwwwSElBIFNJUCBDbGllbnQgQ0EgKHNpcC1lYi5kZXZlYi5o
+aWFwbGF0Zm9ybS5uZXQpMRUwEwYDVQQKDAxISUEgUGxhdGZvcm0xCzAJBgNVBAYT
+AlVTMCAXDTI2MDcxNTE0MDIxNloYDzIwNTEwNzA5MTQwMjE2WjAxMS8wLQYDVQQD
+DCZFTEQwMDFhMWIyYzNkNGU1ZjY3ODkwMTIzNDU2Nzg5MGFiY2RlZjCCASIwDQYJ
+KoZIhvcNAQEBBQADggEPADCCAQoCggEBALXVRXVdvBTxLRA24NNkT8qlaQoY8Keh
+h1thB3/22T224zmo6njr4fGvhNhNJuJeyEgnU8MTIt2I9TkcYE83I6+T15nCBU1Q
+ODgNEMfeFqp7gYLpXXwdr9FWbCAyRpAkFIxb2o2Asy4BS0W4zNt4HVH393bficcO
+m/cz5LQ9uWLzqlnujOfMWLBVlBfenpDae7EgTku5f0jFKXd1m7URmuttAHhIIFiq
+bVjQbMcKx+MlVZg/Agg7Ylbja17zpQCqvWZtbEbc1AdlmRoRfyX9zKH5NjjmNLCr
+gMN+k8ix7RKcvAJj791Ly0HZ3vdDFHevaBUIGMmbivdbl1CTm9QpfdMCAwEAAaN5
+MHcwDAYDVR0TAQH/BAIwADATBgNVHSUEDDAKBggrBgEFBQcDAjBSBgNVHREESzBJ
+hkdzaXA6RUxEMDAxYTFiMmMzZDRlNWY2Nzg5MDEyMzQ1Njc4OTBhYmNkZWZAc2lw
+LWViLmRldmViLmhpYXBsYXRmb3JtLm5ldDANBgkqhkiG9w0BAQsFAAOCAgEAMq4C
+h5jLBhtC+geTZvS51LTMvfDX54ugG8lefsHiP7nSbri8r8agh8QFGVC/jYHUtgGz
+nI5SufOcMmXg2CkrHBVGHUgjXY1at+SmP1IYGzm6sk4vSfP8GrdqPWp34K60JJ7j
+C1zkgkB4oc14JXTwWIefgi2K0eWWmKWCu+aOBNJLMAN+1kGCmnA60o4YBoglBvvU
+pZECJTra0vHfrUdPWrUb5Ic1lE6PpkkuEYS//yX9CyEiUAHm3hHqW6boso/LIYSl
+DeseITGm/qpbWxyC1sQsdacKSC4F8Huhn+Hp4KN5UwAKRMQcpKX47irVUusYU1ak
+wMs4zo09qPJDoVzM2jmCWQh0mbm5pyupbnPgiirIjU1llwltXk1KpsVEUb5XSuP6
+yOhzea2Z3LGSVXaBa61maAwwjJMCkBkPXd/Jj3ZOfS7gHD3yuL6NsqUHsOeToVYt
+kTCc6Hhskld23LMpsDyXcYgDu/eegm5qSwjf9XSODNfXylI4/qMEMuBwJzRzXUAy
+YMLVGVR8WrJh8pi768jGsV8yN591HiNYuw6wl7AmI1jogegxktMQlQaYV6BTCDuq
+jI7SAQzIiQo8uCjtmJU6FX/+IXWGYYEtP3K01EfyT5qK0NuS5Zo2yKlycLMgKWe3
+zS7df1WgVgMCD+jNtScGBtITLq9djsXHBnTyapk=
+-----END CERTIFICATE-----''';
+
+const String _sampleValidKeyPem = '''-----BEGIN RSA PRIVATE KEY-----
+MIIEogIBAAKCAQEAtdVFdV28FPEtEDbg02RPyqVpChjwp6GHW2EHf/bZPbbjOajq
+eOvh8a+E2E0m4l7ISCdTwxMi3Yj1ORxgTzcjr5PXmcIFTVA4OA0Qx94WqnuBguld
+fB2v0VZsIDJGkCQUjFvajYCzLgFLRbjM23gdUff3dt+Jxw6b9zPktD25YvOqWe6M
+58xYsFWUF96ekNp7sSBOS7l/SMUpd3WbtRGa620AeEggWKptWNBsxwrH4yVVmD8C
+CDtiVuNrXvOlAKq9Zm1sRtzUB2WZGhF/Jf3Mofk2OOY0sKuAw36TyLHtEpy8AmPv
+3UvLQdne90MUd69oFQgYyZuK91uXUJOb1Cl90wIDAQABAoIBADwPq8dGRHuIZHGw
+Jtg8kKynsYf/z/IXBV5WMQOANqbPc8PWe0ig5buO1esapObuFurabq0Hc6NIe3O3
+X0qbNILo6zTjJRwyDLfa/Pl/7u22KQPkcJgwOCSGDuYdpTg0asMoDgtigQ0HqWTo
+02YFCW5LYWbXFKv3M+ZWMkuk/cjkkyGwW3/rP4djubp6s6oKv5krg6AIb+Qe8oPM
+Tnndumf9ZgrtwcyL5R7KTe4cCq1emz0oLLkNo96k3G2fbXqRZuSs/GTYbyY6t9Oi
+ZNO9t4IZs8UK34pIhcggQ2aja+zWIfQilzEXNCOJ0jc4JGusfVeECgElBSEVJI/E
+9eWeF+0CgYEA8ccpROCngE0pTVj23jgBQwi5xFQ306V14Oi1qgHiD8FvkpQNC6i4
+Wla+tWOhXwCuPtbGkWsBhSa7VhFsM6uynP4TNdJxXsVPKyt9q3QJ+TPVnHzbUcbI
+tyj2G1tZFAhIkXZM71h1lD0Agrl2YHzQZzvbVbtEXjbxNHhdsCfOWr8CgYEAwIds
+gieSyOxorOsqEaoj8npxqFvTDoxyQz6yY3NiA1p6bZYKaKo5uyJKJAoP2WQPsDXx
+uimNmo7U4bHupUnv6Hhv3XGQ23qUzLxPIAkIEyBbpQ4Nlm2YcxD2ZbI3i6SesfY5
+7oSPYyBhTqcs7aUcc0HmaOTCtDis4A7DU4DWRe0CgYAO+mOYHMLDtAQHAqfohFev
+q262tvDub6Wp1UDL02oJx9X9oqZcPouNLSqLWiy5EfW5dty+TX6+nPOmFVY6rTxX
+dXYDM5JKaLbK2drjMEEd6xQkqad8nW/5yNPWRgZys0CrokSJ31UJZe4OKycmOxU+
+D/s6iGtn2sd+lKZZL14dSQKBgArFyRGDS1hIuhaq1eDFJ1vC9CcadDXFMAOJN4wP
+AbX0UxNcqNpwY+iPo5xen8JnMeWHLy5ectjqEwlJ3nOLLoxQaNn4J8XQFxFZnAfL
+2ZLQZbBXl/UJztTpZxALp8X9gQ+uGlG5Qxil0CwJeJ8XdP8R+eV2n1pcLXgf+1fp
+xpOFAoGAMFUKE6FkLjJHxSPIl+VzrSoHYyVdg6+NnAsXFp8rq7MFrPi5eGwp2Ug3
+TpE3PaWZOy1GvYY8UfZxT/dZGUmODDOF/vS4e6GtO6B54M9W4wC7JbCcgaEpdszn
+/GixDXVwe2H8YeT4QzS+VOo6fBXzNsGhemb4320IoDOqjvY182I=
+-----END RSA PRIVATE KEY-----''';
+
+const String _sampleValidCaPem = '''-----BEGIN CERTIFICATE-----
+MIIFnzCCA4egAwIBAgIUKG8BLwjg30w7NDGaxBlvs8wApcIwDQYJKoZIhvcNAQEL
+BQAwXzE5MDcGA1UEAwwwSElBIFNJUCBDbGllbnQgQ0EgKHNpcC1lYi5kZXZlYi5o
+aWFwbGF0Zm9ybS5uZXQpMRUwEwYDVQQKDAxISUEgUGxhdGZvcm0xCzAJBgNVBAYT
+AlVTMB4XDTI2MDcxNTExMTQyNloXDTM2MDcxMjExMTQyNlowXzE5MDcGA1UEAwww
+SElBIFNJUCBDbGllbnQgQ0EgKHNpcC1lYi5kZXZlYi5oaWFwbGF0Zm9ybS5uZXQp
+MRUwEwYDVQQKDAxISUEgUGxhdGZvcm0xCzAJBgNVBAYTAlVTMIICIjANBgkqhkiG
+9w0BAQEFAAOCAg8AMIICCgKCAgEAztah+8Kz+khnZxA5ifm7uXFyCk+jWeOPQhP3
+Gi1oXrOWYkTV4FxkMQ9zjEC6OGchU3GZpbkkJZEoqfcQ50MRBAmhuOrQlyp0FWyJ
+ZsmxMbm9EfddBQLSjXQgFN5vg2uDPv6IRTUm+eWgKUKghviSBoGusFd3ygpzn/nQ
+3KVdkkdo4kzIG21xLiUgj8d9ErdwrIzmfN/Jn7lXt/G8Meiw+53HH+m/z1NXCu/r
+rz/EUNXm2KFWRUSpR8ja4bDLUXYBffJe6SqLQnK8DOsdpPa8jOgIGvu4QPIMLS0R
+FY+DTSUjhvQln1NEHmiwDRSWZ09SseIRKQ9v/YyyEeCdhWNk7Z0h1Gs/5UvL0fVC
+Figb2Azhp1AGLwjDjyZ0zLXYEQxMQ0btlricJiyGNV+RFG6vB73/2cmA753UoPlm
+LUN/efDwFWbl2Shd28bFhxQ2WV2PouMyeQMt3Pvgpx2E2L41MGlSWPiRyg+HVxRK
+rDMPJiM2e+STdg1yjeJ/Mck2RK/CI8YAbDUaDIlLdhSurL7LMaemr5sI/eYGAeRn
+CvA/83OKZegEO8H85QmolBTPXVVrHZKmuUx4Sq0BmViiTdMWFv1BEkCZ8PAMwjnj
+oqN+5r2ORi25KxnNeU/DjNUyNc4I3Z99dRPurjr4r9W0HCijHAeK3z1bFPrwlJ7c
++HN5ts8CAwEAAaNTMFEwHQYDVR0OBBYEFDKqFvEE2fbRds4pwetZ2HYQhQ6HMB8G
+A1UdIwQYMBaAFDKqFvEE2fbRds4pwetZ2HYQhQ6HMA8GA1UdEwEB/wQFMAMBAf8w
+DQYJKoZIhvcNAQELBQADggIBAIUfSWRlFPZDgVWbt5Ycfh8DItefUfoIQkXuFkS5
+EknumJk6qhoEU9cn8mFnaZvcNH/iCbAffC/77Ng1oHti1VTJHkgndymU7oqVhULU
+8+L0wJGdoIvV0BzIWA3cFq6aAcQD7IciAd9xQA9wHpQ3LSO4V3bF+U5MK79QG+4Z
+guOQRiy74tiy4N+sPXQYuSq/7t4pZ3Y3W6gdmnLAk5Sr+q8hwmCzHEHkOKxdM9/J
+ZC1ABRZjXkO5YdtFa4lyuQX+yhzOitvKYgFMwooLWRJGppjlF6tpStkJkDhTiPZL
+XVm3Z0wjrZLn7x8YYpSc3mZc7f5m70E6fLCr5msY2cnwEje0B+aWVv6QwB3AKsxA
+AMo6lIQsVNVUwwLqzLe5hwQDbRCN4yCAPw5ZK+ap7qbyqceWliUZ3m/XdTZOLvHI
+BlDH0dM7NfVIBM0dMUkXPSAiW4gE/y6JjoLmB04fw0OzsXvRXq2CALKT/0ZzX1tL
+AAgzCtg+bLpBIdbdDqZVecJYt3rS/Lu7EKhwBnZ3ScPw6SFuXU/zTqPJjgPYriYO
+aiUPddM1RsPA762ngmqo2Fowim153zZZs2rkIYYcL4Gcd/aYJS+ZWeCsA95+O4NH
+Jrsky94k6R3HVD2lQwP3dnHvEm+fTP5JneH68sJLJPvoUwKrD7m9laYNXlOl2x8N
+uFrY
+-----END CERTIFICATE-----''';
