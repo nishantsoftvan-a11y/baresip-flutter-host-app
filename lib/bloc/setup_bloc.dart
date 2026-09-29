@@ -575,7 +575,6 @@ class SetupBloc extends Bloc<SetupEvent, SetupState> {
           mediaNat: mediaNat,
           mediaEncryption: mediaEnc,
           useMtls: p.useMtls,
-          useCsr: p.useCsr,
           useAuthUsername: p.authUsername.isNotEmpty,
           audioCodecs: fullList,
           enabledCodecs: enabledSet,

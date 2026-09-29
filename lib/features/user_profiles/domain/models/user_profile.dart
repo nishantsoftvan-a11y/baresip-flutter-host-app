@@ -21,7 +21,6 @@ class UserProfile {
 
   // ── mTLS ─────────────────────────────────────────────────────────────────
   final bool useMtls;
-  final bool useCsr;
   final String mtlsAlias;
   final String caCertPem;
   final String clientCertPem;
@@ -70,7 +69,6 @@ class UserProfile {
     required this.transport,
     required this.authUsername,
     required this.useMtls,
-    required this.useCsr,
     required this.mtlsAlias,
     required this.caCertPem,
     required this.clientCertPem,
@@ -122,7 +120,6 @@ class UserProfile {
       transport: json['transport'] as String? ?? 'tls',
       authUsername: json['authUsername'] as String? ?? '',
       useMtls: json['useMtls'] as bool? ?? false,
-      useCsr: json['useCsr'] as bool? ?? false,
       mtlsAlias: json['mtlsAlias'] as String? ?? '',
       caCertPem: json['caCertPem'] as String? ?? '',
       clientCertPem: json['clientCertPem'] as String? ?? '',
@@ -130,7 +127,8 @@ class UserProfile {
       enrollmentUrl: json['enrollmentUrl'] as String? ?? '',
       authToken: json['authToken'] as String? ?? '',
       mediaEncryption: json['mediaEncryption'] as String? ?? '',
-      audioCodecs: (json['audioCodecs'] as List<dynamic>?)
+      audioCodecs:
+          (json['audioCodecs'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           [],
@@ -140,10 +138,8 @@ class UserProfile {
       stunServer: json['stunServer'] as String? ?? '',
       stunPort: json['stunPort'] as int? ?? 3478,
       stunRefreshPeriod: json['stunRefreshPeriod'] as int? ?? 30,
-      stunAllowPrivateAddress:
-          json['stunAllowPrivateAddress'] as bool? ?? true,
-      stunAllowPrivateServer:
-          json['stunAllowPrivateServer'] as bool? ?? true,
+      stunAllowPrivateAddress: json['stunAllowPrivateAddress'] as bool? ?? true,
+      stunAllowPrivateServer: json['stunAllowPrivateServer'] as bool? ?? true,
       stunDnsSrv: json['stunDnsSrv'] as bool? ?? true,
       turnServer: json['turnServer'] as String? ?? '',
       turnPort: json['turnPort'] as int? ?? 3478,
@@ -170,7 +166,6 @@ class UserProfile {
       'transport': transport,
       'authUsername': authUsername,
       'useMtls': useMtls,
-      'useCsr': useCsr,
       'mtlsAlias': mtlsAlias,
       'caCertPem': caCertPem,
       'clientCertPem': clientCertPem,
