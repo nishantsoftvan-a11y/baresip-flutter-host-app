@@ -432,8 +432,6 @@ class _SetupFormState extends State<_SetupForm> {
           break;
         case SetupPendingAction.none:
           break;
-        default:
-          break;
       }
 
       // Consume the pending action so we don't re-fire
@@ -527,7 +525,6 @@ class _SetupFormState extends State<_SetupForm> {
       transport: setupState.transport.name,
       authUsername: _authUsernameCtrl.text.trim(),
       useMtls: setupState.useMtls,
-      useCsr: setupState.useCsr,
       mtlsAlias: mtlsAlias,
       caCertPem: _caCertCtrl.text,
       clientCertPem: _clientCertCtrl.text,

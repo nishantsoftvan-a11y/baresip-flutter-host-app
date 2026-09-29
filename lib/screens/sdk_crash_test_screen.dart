@@ -609,39 +609,6 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
       ),
       CrashTestCase(
         tcId: 'TC-16',
-        id: 'sec_3_unreachable_csr',
-        title: '4.3 Unreachable CA CSR Enrollment',
-        category: TestCategory.security,
-        targetLayer: 'SDK:EnrollmentClient',
-        triggerAction: 'Submit CSR request to non-existent endpoint',
-        expectedResult: 'Network failure returned safely as MtlsResult.Failure',
-        description:
-            'Generates EC key pair and submits CSR to a non-existent / unreachable CA server.',
-        potentialCrashRisk:
-            'Socket timeout / Network on main thread exception locking the app',
-        crashGenerationLogic:
-            'Requesting automatic CSR enrollment from an unreachable CA endpoint.',
-        resolutionLogic:
-            'Wrapped network calls in Dispatchers.IO coroutine scopes with guaranteed Flutter result dispatch.',
-        action: () async {
-          final client = SipClient.instance;
-          final result = await client.configureCsrMtls(
-            const CsrConfig(
-              enrollmentUrl:
-                  'http://192.0.2.1:9999/non-existent-ca-csr-endpoint',
-              certAlias: 'test_unreachable_csr',
-              username: 'test_agent_1001',
-              caCertPem: '-----BEGIN CERTIFICATE-----\nFakeCaData',
-            ),
-          );
-          if (result.isFailure) {
-            return 'Handled safely: Network failure caught (${result.errorCode}): ${result.message}';
-          }
-          return 'Result: Success (${result.message})';
-        },
-      ),
-      CrashTestCase(
-        tcId: 'TC-17',
         id: 'sec_4_remove_nonexistent_alias',
         title: '4.4 Remove Non-Existent mTLS Alias',
         category: TestCategory.security,
@@ -665,7 +632,7 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
         },
       ),
       CrashTestCase(
-        tcId: 'TC-17b',
+        tcId: 'TC-16b',
         id: 'sec_5_dynamic_cert_renewal',
         title: '4.5 Dynamic Certificate Renewal on Running Engine',
         category: TestCategory.security,
@@ -762,7 +729,7 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
       // 5. INVALID SEQUENCE & LIFECYCLE CHAOS
       // ═════════════════════════════════════════════════════════════════════════
       CrashTestCase(
-        tcId: 'TC-18',
+        tcId: 'TC-17',
         id: 'chaos_1_bridge_throwable',
         title: '5.1 Bridge Throwable / Exception Isolation',
         category: TestCategory.invalidSequence,
@@ -790,7 +757,7 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
         },
       ),
       CrashTestCase(
-        tcId: 'TC-19',
+        tcId: 'TC-18',
         id: 'chaos_2_native_jni_error',
         title: '5.2 Native JNI Error Dispatch & Clearance',
         category: TestCategory.invalidSequence,
@@ -812,7 +779,7 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
         },
       ),
       CrashTestCase(
-        tcId: 'TC-20',
+        tcId: 'TC-19',
         id: 'chaos_3_concurrency_storm',
         title: '5.3 Massive Concurrency Storm (50 Parallel Requests)',
         category: TestCategory.invalidSequence,
@@ -850,7 +817,7 @@ class SdkCrashTestScreenState extends State<SdkCrashTestScreen> {
         },
       ),
       CrashTestCase(
-        tcId: 'TC-21',
+        tcId: 'TC-20',
         id: 'chaos_4_method_during_teardown',
         title: '5.4 Actions During Subsystem Teardown',
         category: TestCategory.invalidSequence,

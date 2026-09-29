@@ -127,15 +127,6 @@ class _WatchSetupFormState extends State<_WatchSetupForm> {
     if (state.pendingAction != SetupPendingAction.none) {
       final sipBloc = context.read<SipBloc>();
       switch (state.pendingAction) {
-        case SetupPendingAction.csrEnroll:
-          if (state.pendingConfig != null && state.pendingCsrConfig != null) {
-            sipBloc.add(
-              InitializeWithCsrAndLoginSip(
-                state.pendingConfig!,
-                state.pendingCsrConfig!,
-              ),
-            );
-          }
         case SetupPendingAction.mtlsPem:
           if (state.pendingConfig != null && state.pendingMtlsConfig != null) {
             sipBloc.add(
